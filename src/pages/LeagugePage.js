@@ -18,75 +18,126 @@ import {
   Tooltip,
   Snackbar,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import { Delete, Edit } from '@mui/icons-material';
+import axios from 'axios';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../service/firebase-config'; // Your Firebase configuration file
 import TableLoading from '../components/table-loading/tableLoading';
 
-const CategoryList = () => {
-  const [categories, setCategories] = useState([]);
+const LeagueList = () => {
+  const [leagues, setLeagues] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditModalOpen, setEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [currentCategory, setCurrentCategory] = useState(null);
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const [currentLeague, setCurrentLeague] = useState(null);
+  const [newLeagueName, setNewLeagueName] = useState('');
+  const [newLeagueImage, setNewLeagueImage] = useState(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const leaguesCollection = collection(db, 'leagues'); // Firestore collection reference
 
   const TABLE_HEAD = [
-    { id: 'profile.image.file', label: 'Image', alignRight: false },
-    { id: 'profile.fullName', label: 'Name', alignRight: false },
-    { id: 'isCompleteProfile', label: 'Role', alignRight: false },
+    { id: 'teamName', label: 'Team Name', alignRight: false },
+    { id: 'teamLogo', label: 'Team Logo', alignRight: false },
+    { id: 'actions', label: 'Actions', alignRight: false },
   ];
 
-  // Simulate fetching data
+  // Fetch leagues from Firestore
   useEffect(() => {
-    setTimeout(() => {
-      setCategories([
-        { id: 1, categoryName: 'Leaguge 1' },
-        { id: 2, categoryName: 'Leaguge 2' },
-      ]);
-      setIsLoading(false);
-    }, 1000);
+    const fetchLeagues = async () => {
+      setIsLoading(true);
+      try {
+        const data = await getDocs(leaguesCollection);
+        setLeagues(data.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      } catch (error) {
+        console.error('Error fetching leagues:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchLeagues();
   }, []);
 
-  const handleEditCategory = (category) => {
-    setCurrentCategory(category);
-    setNewCategoryName(category.categoryName);
+  const handleEditLeague = (league) => {
+    setCurrentLeague(league);
+    setNewLeagueName(league.leagueName);
+    setNewLeagueImage(null);
     setEditModalOpen(true);
   };
 
-  const handleDeleteCategory = (category) => {
-    setCurrentCategory(category);
+  const handleDeleteLeague = (league) => {
+    setCurrentLeague(league);
     setDeleteModalOpen(true);
   };
 
-  const handleSaveCategoryChanges = () => {
-    setCategories((prevCategories) =>
-      prevCategories.map((cat) => (cat.id === currentCategory.id ? { ...cat, categoryName: newCategoryName } : cat))
-    );
-    setEditModalOpen(false);
-    setSnackbarMessage('Category updated successfully!');
-    setSnackbarOpen(true);
+  const uploadImageToCloudinary = async (imageFile) => {
+    const formData = new FormData();
+    formData.append('file', imageFile);
+    formData.append('upload_preset', 'newpresent'); // Replace with your Cloudinary upload preset
+
+    try {
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/dkfgfnbst/image/upload`, // Replace "your_cloud_name"
+        formData
+      );
+      return response.data.secure_url;
+    } catch (error) {
+      console.error('Error uploading image to Cloudinary:', error);
+      throw new Error('Image upload failed');
+    }
   };
 
-  const handleConfirmDelete = () => {
-    setCategories((prevCategories) => prevCategories.filter((cat) => cat.id !== currentCategory.id));
-    setDeleteModalOpen(false);
-    setSnackbarMessage('Category deleted successfully!');
-    setSnackbarOpen(true);
-  };
+  const handleSaveLeagueChanges = async () => {
+    setUploadingImage(true);
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim() !== '') {
-      setCategories((prevCategories) => [
-        ...prevCategories,
-        { id: prevCategories.length + 1, categoryName: newCategoryName },
-      ]);
-      setNewCategoryName('');
+    try {
+      let imageUrl = currentLeague?.imageUrl || '';
+      if (newLeagueImage) {
+        imageUrl = await uploadImageToCloudinary(newLeagueImage);
+      }
+
+      if (currentLeague) {
+        // Update existing league
+        const leagueDoc = doc(db, 'leagues', currentLeague.id);
+        await updateDoc(leagueDoc, { leagueName: newLeagueName, imageUrl });
+        setLeagues((prev) =>
+          prev.map((league) =>
+            league.id === currentLeague.id ? { ...league, leagueName: newLeagueName, imageUrl } : league
+          )
+        );
+        setSnackbarMessage('League updated successfully!');
+      } else {
+        // Add new league
+        const newDoc = await addDoc(leaguesCollection, { leagueName: newLeagueName, imageUrl });
+        setLeagues((prev) => [...prev, { id: newDoc.id, leagueName: newLeagueName, imageUrl }]);
+        setSnackbarMessage('League added successfully!');
+      }
+
       setEditModalOpen(false);
-      setSnackbarMessage('Category added successfully!');
+    } catch (error) {
+      console.error('Error saving league:', error);
+      setSnackbarMessage('Failed to save league');
+    } finally {
+      setUploadingImage(false);
       setSnackbarOpen(true);
     }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (currentLeague) {
+      const leagueDoc = doc(db, 'leagues', currentLeague.id);
+      await deleteDoc(leagueDoc);
+      setLeagues((prev) => prev.filter((league) => league.id !== currentLeague.id));
+      setSnackbarMessage('League deleted successfully!');
+    }
+
+    setDeleteModalOpen(false);
+    setSnackbarOpen(true);
   };
 
   const handleSnackbarClose = () => {
@@ -96,52 +147,55 @@ const CategoryList = () => {
   return (
     <Box>
       <Typography variant="h4" sx={{ mb: 3 }}>
-        Leaguges List
+        Leagues List
       </Typography>
       <Button
         style={{ backgroundColor: '#f87203' }}
         onClick={() => {
-          setNewCategoryName('');
-          setCurrentCategory(null);
+          setNewLeagueName('');
+          setNewLeagueImage(null);
+          setCurrentLeague(null);
           setEditModalOpen(true);
         }}
         variant="contained"
         sx={{ mb: 2 }}
       >
-        Add New Leaguge
+        Add New League
       </Button>
 
       {isLoading ? (
-        <TableContainer sx={{ minWidth: 800 }}>
-          <Table>
-            <TableBody>
-              <TableLoading tableHeading={TABLE_HEAD} />
-            </TableBody>
-          </Table>
-        </TableContainer>
+       <TableContainer sx={{ minWidth: 800 }}>
+       <Table>
+         <TableBody>
+           <TableLoading tableHeading={TABLE_HEAD} />
+         </TableBody>
+       </Table>
+     </TableContainer>
       ) : (
         <TableContainer>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Leaguges Name</TableCell>
-                <TableCell>Leaguges Image</TableCell>
+                <TableCell>League Name</TableCell>
+                <TableCell>Image</TableCell>
                 <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {categories.map((category) => (
-                <TableRow key={category.id}>
-                  <TableCell>{category.categoryName}</TableCell>
-                  <TableCell>{category.categoryName}</TableCell>
+              {leagues.map((league) => (
+                <TableRow key={league.id}>
+                  <TableCell>{league.leagueName}</TableCell>
+                  <TableCell>
+                    <img src={league.imageUrl} alt={league.leagueName} width="50" height="50" />
+                  </TableCell>
                   <TableCell>
                     <Tooltip title="Edit">
-                      <IconButton onClick={() => handleEditCategory(category)}>
+                      <IconButton onClick={() => handleEditLeague(league)}>
                         <Edit />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Delete">
-                      <IconButton color="error" onClick={() => handleDeleteCategory(category)}>
+                      <IconButton color="error" onClick={() => handleDeleteLeague(league)}>
                         <Delete />
                       </IconButton>
                     </Tooltip>
@@ -153,50 +207,61 @@ const CategoryList = () => {
         </TableContainer>
       )}
 
-      {/* Edit/Add Category Modal */}
+      {/* Edit/Add League Modal */}
       <Dialog open={isEditModalOpen} onClose={() => setEditModalOpen(false)}>
-        <DialogTitle>{currentCategory ? 'Edit Category' : 'Add Category'}</DialogTitle>
+        <DialogTitle>{currentLeague ? 'Edit League' : 'Add League'}</DialogTitle>
         <DialogContent>
           <TextField
-            label="Category Name"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
+            label="League Name"
+            value={newLeagueName}
+            onChange={(e) => setNewLeagueName(e.target.value)}
             fullWidth
             margin="dense"
           />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setNewLeagueImage(e.target.files[0])}
+            style={{ marginTop: 10 }}
+          />
+          {uploadingImage && <CircularProgress size={24} sx={{ mt: 2 }} />}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditModalOpen(false)}>Cancel</Button>
-          <Button onClick={currentCategory ? handleSaveCategoryChanges : handleAddCategory} color="primary">
-            {currentCategory ? 'Save' : 'Add'}
+          <Button onClick={handleSaveLeagueChanges} color="primary">
+            {currentLeague ? 'Save' : 'Add'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Delete Category Modal */}
-      {currentCategory && (
-        <Dialog open={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
-          <DialogTitle>Confirm Delete</DialogTitle>
-          <DialogContent>
-            Are you sure you want to delete <strong>{currentCategory.categoryName}</strong>?
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleConfirmDelete} color="error">
-              Delete
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+      {/* Delete League Modal */}
+      <Dialog open={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          Are you sure you want to delete <strong>{currentLeague?.leagueName}</strong>?
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Snackbar for notifications */}
-      <Snackbar open={snackbarOpen} autoHideDuration={3000} onClose={handleSnackbarClose}>
-        <Alert onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
+      <Snackbar
+  open={snackbarOpen}
+  autoHideDuration={3000}
+  onClose={handleSnackbarClose}
+  anchorOrigin={{ vertical: 'center', horizontal: 'center' }} // Center the snackbar
+>
+  <Alert onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
+    {snackbarMessage}
+  </Alert>
+</Snackbar>
+
     </Box>
   );
 };
 
-export default CategoryList;
+export default LeagueList;

@@ -25,7 +25,7 @@ const Logo = forwardRef(({ disabledLink = false, sx, ...other }, ref) => {
       src={'https://i.ibb.co/F46T9VB/logo.png'}
       sx={{
         width: 200,
-        height: 150,
+        height: 130,
         cursor: 'pointer',
        
         alignItems: 'center',

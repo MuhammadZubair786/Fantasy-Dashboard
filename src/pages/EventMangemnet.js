@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -10,48 +10,34 @@ import {
   TextField,
   Typography,
   Snackbar,
+  
   Alert,
   Paper,
   Grid,
   Tooltip,
   Collapse,
   Avatar,
+  TableContainer,
+  TableBody,
+  Table,
 } from '@mui/material';
-import { Edit, Delete, Visibility, ArrowDownward, ArrowUpward } from '@mui/icons-material';
+import { Edit, Delete, ArrowDownward, ArrowUpward } from '@mui/icons-material';
+
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+} from 'firebase/firestore';
+import { db } from '../service/firebase-config';
+import TableLoading from '../components/table-loading/tableLoading';
 
 const ActiveMatchPage = () => {
-  // Static data for matches
-  const [matches, setMatches] = useState([
-    {
-      id: 1,
-      team1: 'Manchester United',
-      team2: 'Chelsea',
-      team1Score: 2,
-      team2Score: 1,
-      matchDetails: 'Match played at Old Trafford, Manchester',
-      isExpanded: false,
-    },
-    {
-      id: 2,
-      team1: 'Real Madrid',
-      team2: 'Barcelona',
-      team1Score: 1,
-      team2Score: 1,
-      matchDetails: 'Match played at Santiago Bernabeu, Madrid',
-      isExpanded: false,
-    },
-    {
-      id: 3,
-      team1: 'Liverpool',
-      team2: 'Manchester City',
-      team1Score: 3,
-      team2Score: 0,
-      matchDetails: 'Match played at Anfield, Liverpool',
-      isExpanded: false,
-    },
-  ]);
-  
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [matches, setMatches] = useState([]);
+  const [laoding,setloading] =useState(true)
+   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentMatch, setCurrentMatch] = useState(null);
   const [team1, setTeam1] = useState('');
   const [team2, setTeam2] = useState('');
@@ -59,6 +45,26 @@ const ActiveMatchPage = () => {
   const [team2Score, setTeam2Score] = useState(0);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+
+  const matchesCollection = collection(db, 'matches'); // Firestore collection reference
+
+  // Fetch matches from Firestore
+  const fetchMatches = async () => {
+
+
+    const querySnapshot = await getDocs(matchesCollection);
+    const matchesData = querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setMatches(matchesData);
+    setloading(false)
+  };
+
+  useEffect(() => {
+    setloading(true)
+    fetchMatches();
+  }, []);
 
   const handleOpenDialog = (match = null) => {
     if (match) {
@@ -81,39 +87,38 @@ const ActiveMatchPage = () => {
     setIsDialogOpen(false);
   };
 
-  const handleSaveMatch = () => {
+  const handleSaveMatch = async () => {
     if (currentMatch) {
-      // Update the match
-      setMatches((prevMatches) =>
-        prevMatches.map((match) =>
-          match.id === currentMatch.id
-            ? { ...match, team1Score, team2Score }
-            : match
-        )
-      );
+      // Update match in Firestore
+      const matchDoc = doc(db, 'matches', currentMatch.id);
+      await updateDoc(matchDoc, {
+        team1Score,
+        team2Score,
+      });
       setSnackbarMessage('Match updated successfully!');
     } else {
-      // Add new match
-      const newMatch = {
-        id: Date.now(),
+      // Add new match to Firestore
+      await addDoc(matchesCollection, {
         team1,
         team2,
         team1Score,
         team2Score,
         matchDetails: 'Match details not available',
         isExpanded: false,
-      };
-      setMatches((prevMatches) => [...prevMatches, newMatch]);
+      });
       setSnackbarMessage('Match added successfully!');
     }
     setSnackbarOpen(true);
     handleCloseDialog();
+    fetchMatches(); // Refresh matches after adding/updating
   };
 
-  const handleDeleteMatch = (matchId) => {
-    setMatches((prevMatches) => prevMatches.filter((match) => match.id !== matchId));
+  const handleDeleteMatch = async (matchId) => {
+    const matchDoc = doc(db, 'matches', matchId);
+    await deleteDoc(matchDoc);
     setSnackbarMessage('Match deleted successfully!');
     setSnackbarOpen(true);
+    fetchMatches(); // Refresh matches after deletion
   };
 
   const handleToggleDetails = (matchId) => {
@@ -123,6 +128,13 @@ const ActiveMatchPage = () => {
       )
     );
   };
+
+  const TABLE_HEAD = [
+    { id: 'teamName', label: 'Team Name', alignRight: false },
+    { id: 'teamLogo', label: 'Team Logo', alignRight: false },
+    { id: 'actions', label: 'Actions', alignRight: false },
+  ];
+
 
   return (
     <Box sx={{ padding: 3 }}>
@@ -140,8 +152,18 @@ const ActiveMatchPage = () => {
       </Button>
 
       <Grid container spacing={3}>
-        {matches.length === 0 ? (
-          <Typography>No active matches available. Add a match to get started!</Typography>
+      {
+      laoding ? 
+       <TableContainer sx={{ minWidth: 800 }}>
+       <Table>
+         <TableBody>
+           <TableLoading tableHeading={TABLE_HEAD} />
+         </TableBody>
+       </Table>
+     </TableContainer>
+      :
+        matches.length === 0 ? (
+          <Typography style={{margin:"20px"}}>No active matches available. Add a match to get started!</Typography>
         ) : (
           matches.map((match) => (
             <Grid item xs={12} md={6} key={match.id}>
@@ -193,6 +215,7 @@ const ActiveMatchPage = () => {
             </Grid>
           ))
         )}
+      
       </Grid>
 
       {/* Dialog for adding/editing match */}

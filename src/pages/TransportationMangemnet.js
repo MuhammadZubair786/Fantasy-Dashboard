@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Add, Edit, Delete, Visibility } from '@mui/icons-material';
+
 import {
   Box,
   Button,
@@ -21,8 +23,17 @@ import {
   TableHead,
   TableRow,
   Skeleton,
-} from '@mui/material';
-import { Add, Edit, Delete, Visibility } from '@mui/icons-material';
+} from '@mui/material'
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  doc,
+} from 'firebase/firestore';
+import { db } from '../service/firebase-config';
 
 const DraftWrestlingAdminPage = () => {
   const [members, setMembers] = useState([]);
@@ -39,29 +50,53 @@ const DraftWrestlingAdminPage = () => {
   const [showDraftDetails, setShowDraftDetails] = useState(null); // For showing draft details
 
   const intervalRef = useRef(null);
+  const membersCollection = collection(db, 'members');
+const draftsCollection = collection(db, 'drafts');
+  // Fetch members from Firestore
+  const fetchMembers = async () => {
+    const querySnapshot = await getDocs(membersCollection);
+    const fetchedMembers = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setMembers(fetchedMembers);
+    setLoading(false);
+  };
 
-  // Simulate fetching data from the server (3 seconds delay)
+  // Fetch drafts from Firestore
+  const fetchDrafts = async () => {
+    const querySnapshot = await getDocs(draftsCollection);
+    const fetchedDrafts = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setDrafts(fetchedDrafts);
+  };
+
+  // Fetch data on component mount
   useEffect(() => {
-    setTimeout(() => {
-      setMembers([
-        { id: 1, name: 'John Doe', score: 10, rank: 5 },
-        { id: 2, name: 'Jane Smith', score: 15, rank: 3 },
-        { id: 3, name: 'Tommy Lee', score: 8, rank: 7 },
-      ]);
-      setLoading(false);
-    }, 3000);
+    fetchMembers();
+    fetchDrafts();
   }, []);
 
   // Start the draft timer
-  const handleStartDraft = () => {
+  const handleStartDraft = async () => {
     setIsDraftActive(true);
     const startTime = new Date();
     setDraftStartDate(startTime.toLocaleString());  // Store the start time
     setDraftTimer(2);  // Starting timer at 60 seconds for demo
 
+    const newDraft = {
+      startTime: startTime.toLocaleString(),
+      endTime: null,
+      isActive: true,
+      members: [], // Empty list of members initially
+    };
+
+    const docRef = await setDoc(doc(draftsCollection), newDraft); // Save draft to Firestore
     setDrafts((prevDrafts) => [
       ...prevDrafts,
-      { id: prevDrafts.length + 1, startTime: startTime.toLocaleString(), endTime: null, isActive: true },
+      { id: docRef.id, ...newDraft },
     ]);
   };
 
@@ -79,10 +114,11 @@ const DraftWrestlingAdminPage = () => {
             setDrafts((prevDrafts) =>
               prevDrafts.map((draft) =>
                 draft.isActive
-                  ? { ...draft, endTime, isActive: false,members }
+                  ? { ...draft, endTime, isActive: false }
                   : draft
               )
             );
+            updateDraftStatus(endTime); // Update draft in Firestore
             return 0;
           }
           return prev - 1;
@@ -97,48 +133,79 @@ const DraftWrestlingAdminPage = () => {
     };
   }, [isDraftActive, draftTimer]);
 
+  const updateDraftStatus = async (endTime) => {
+    const draftRef = doc(draftsCollection, drafts[0].id);  // Example: First draft
+    await updateDoc(draftRef, {
+      endTime,
+      isActive: false,
+    });
+  };
+
   const handleEditMember = (member) => {
     setEditMember(member);
     setNewMember({ name: member.name, score: member.score, rank: member.rank });
     setIsDialogOpen(true);
   };
 
-  // Save updated member
-  const handleSaveEditedMember = () => {
-    setMembers((prevMembers) =>
-      prevMembers.map((member) =>
-        member.id === editMember.id ? { ...member, ...newMember } : member
-      )
-    );
+  const handleSaveEditedMember = async () => {
+    const updatedMember = { ...editMember, ...newMember };
+    const memberRef = doc(membersCollection, editMember.id);
+    await updateDoc(memberRef, newMember); // Save updated member in Firestore
     setSnackbarMessage('Member updated successfully!');
     setSnackbarOpen(true);
     setEditMember(null);
     setIsDialogOpen(false);
+    fetchMembers(); // Re-fetch members after edit
   };
 
-  // Delete member
-  const handleDeleteMember = (id) => {
-    setMembers((prevMembers) => prevMembers.filter((member) => member.id !== id));
+  const handleDeleteMember = async (id) => {
+    const memberRef = doc(membersCollection, id);
+    await deleteDoc(memberRef); // Delete member from Firestore
     setSnackbarMessage('Member deleted successfully!');
     setSnackbarOpen(true);
+    fetchMembers(); // Re-fetch members after deletion
   };
 
-  // Manually stop the draft
-  const handleStopDraft = () => {
+  const handleStopDraft = async () => {
     setIsDraftActive(false);
     const endTime = new Date().toLocaleString();
     // Update draft status to completed and save the draft
     setDrafts((prevDrafts) =>
       prevDrafts.map((draft) =>
         draft.isActive
-          ? { ...draft, endTime, isActive: false ,members}
+          ? { ...draft, endTime, isActive: false }
           : draft
       )
     );
+    updateDraftStatus(endTime); // Update draft in Firestore
   };
 
+  const handleAddMember = async () => {
+    if (!newMember.name || newMember.score < 0 || newMember.rank < 0) {
+      setSnackbarMessage('Please fill out all fields correctly!');
+      setSnackbarOpen(true);
+      return;
+    }
+  
+    try {
+      await addDoc(membersCollection, {
+        name: newMember.name,
+        score: newMember.score,
+        rank: newMember.rank,
+      });
+      setSnackbarMessage('Member added successfully!');
+      setSnackbarOpen(true);
+      setIsDialogOpen(false); // Close dialog
+      setNewMember({ name: '', score: 0, rank: 0 }); // Reset form state
+      fetchMembers(); // Re-fetch members to update the table
+    } catch (error) {
+      setSnackbarMessage('Failed to add member!');
+      setSnackbarOpen(true);
+    }
+  };
+  
+
   const handleShowDraftDetails = (draftId) => {
-    console.log()
     const draftDetails = drafts.find((draft) => draft.id === draftId);
     setShowDraftDetails(draftDetails);
   };
@@ -312,6 +379,56 @@ const DraftWrestlingAdminPage = () => {
           </Table>
         </TableContainer>
       </Box>
+
+      {
+
+<Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm">
+  <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#2E3B55' }}>
+    {editMember ? 'Edit Member' : 'Add New Member'}
+  </DialogTitle>
+  <DialogContent sx={{ padding: 3 }}>
+    <TextField
+      label="Name"
+      fullWidth
+      value={newMember.name}
+      onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+      sx={{ mb: 2 }}
+    />
+    <TextField
+      label="Score"
+      fullWidth
+      type="number"
+      value={newMember.score}
+      onChange={(e) => setNewMember({ ...newMember, score: e.target.value })}
+      sx={{ mb: 2 }}
+    />
+    <TextField
+      label="Rank"
+      fullWidth
+      type="number"
+      value={newMember.rank}
+      onChange={(e) => setNewMember({ ...newMember, rank: e.target.value })}
+      sx={{ mb: 2 }}
+    />
+  </DialogContent>
+  <DialogActions sx={{ padding: '0 24px 24px' }}>
+    <Button onClick={() => setIsDialogOpen(false)} color="primary">
+      Cancel
+    </Button>
+    <Button
+      onClick={handleAddMember} // Trigger the Add member logic
+      color="primary"
+      variant="contained"
+      sx={{ backgroundColor: '#4A90E2' }}
+    >
+      Save
+    </Button>
+  </DialogActions>
+</Dialog>
+
+      }
+
+      
 
       {showDraftDetails && (
   <Dialog open={Boolean(showDraftDetails)} onClose={() => setShowDraftDetails(null)} fullWidth maxWidth="md">

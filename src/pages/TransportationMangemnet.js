@@ -48,6 +48,8 @@ const DraftWrestlingAdminPage = () => {
   const [drafts, setDrafts] = useState([]); // Track all drafts
   const [draftStartDate, setDraftStartDate] = useState(null); // Store draft start date
   const [showDraftDetails, setShowDraftDetails] = useState(null); // For showing draft details
+  const [currentdraftId, setcurrentdraftId] = useState(""); // For showing draft details
+
 
   const intervalRef = useRef(null);
   const membersCollection = collection(db, 'members');
@@ -84,7 +86,7 @@ const draftsCollection = collection(db, 'drafts');
     setIsDraftActive(true);
     const startTime = new Date();
     setDraftStartDate(startTime.toLocaleString());  // Store the start time
-    setDraftTimer(2);  // Starting timer at 60 seconds for demo
+    setDraftTimer(10);  // Starting timer at 60 seconds for demo
 
     const newDraft = {
       startTime: startTime.toLocaleString(),
@@ -93,10 +95,15 @@ const draftsCollection = collection(db, 'drafts');
       members: [], // Empty list of members initially
     };
 
-    const docRef = await setDoc(doc(draftsCollection), newDraft); // Save draft to Firestore
+    const newDocRef = doc(draftsCollection);
+    await setDoc(newDocRef, newDraft);
+    setcurrentdraftId(newDocRef.id)
+
+    // const docRef = await setDoc(doc(draftsCollection), newDraft); // Save draft to Firestore
+    console.log(newDocRef)
     setDrafts((prevDrafts) => [
       ...prevDrafts,
-      { id: docRef.id, ...newDraft },
+      { id: newDocRef.id, ...newDraft },
     ]);
   };
 
@@ -107,18 +114,7 @@ const draftsCollection = collection(db, 'drafts');
         setDraftTimer((prev) => {
           if (prev <= 1) {
             clearInterval(intervalRef.current); // Clear the interval when timer reaches 0
-            setIsDraftActive(false);
-            const endTime = new Date().toLocaleString();
-
-            // Update draft status to complete with end time and save it
-            setDrafts((prevDrafts) =>
-              prevDrafts.map((draft) =>
-                draft.isActive
-                  ? { ...draft, endTime, isActive: false }
-                  : draft
-              )
-            );
-            updateDraftStatus(endTime); // Update draft in Firestore
+            handleStopDraft()
             return 0;
           }
           return prev - 1;
@@ -134,10 +130,18 @@ const draftsCollection = collection(db, 'drafts');
   }, [isDraftActive, draftTimer]);
 
   const updateDraftStatus = async (endTime) => {
-    const draftRef = doc(draftsCollection, drafts[0].id);  // Example: First draft
+    const querySnapshot = await getDocs(membersCollection);
+    const fetchedMembers = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    console.log("end ")
+    console.log(fetchedMembers)
+    const draftRef = doc(draftsCollection,currentdraftId);  // Example: First draft
     await updateDoc(draftRef, {
       endTime,
       isActive: false,
+      members:fetchedMembers
     });
   };
 
@@ -173,7 +177,7 @@ const draftsCollection = collection(db, 'drafts');
     setDrafts((prevDrafts) =>
       prevDrafts.map((draft) =>
         draft.isActive
-          ? { ...draft, endTime, isActive: false }
+          ? { ...draft, endTime, isActive: false,members }
           : draft
       )
     );

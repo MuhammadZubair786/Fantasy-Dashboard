@@ -10,16 +10,9 @@ import {
   Box,
   TextareaAutosize,
 } from '@mui/material';
-// components
+import { collection, doc, getDocs, setDoc, updateDoc } from "firebase/firestore";
+import { db } from '../service/firebase-config';
 
-import { getPrivacy, getTerms, updatePrivacy, updateTerms } from '../service/user.service';
-
-// import { ProductSort, ProductList, ProductCartWidget, ProductFilterSidebar } from '../sections/@dashboard/products';
-// import Card from '@mui/material/Card';
-// import CardActions from '@mui/material/CardActions';
-// import CardContent from '@mui/material/CardContent';
-// import Button from '@mui/material/Button';
-// import Typography from '@mui/material/Typography';
 
 const style = {
   position: 'absolute',
@@ -27,10 +20,7 @@ const style = {
   left: '50%',
   width: '50%',
   height: '50%',
-  right: 'auto',
-  bottom: 'auto',
   transform: 'translate(-50%, -50%)',
-
   bgcolor: 'background.paper',
   border: '2px solid #000',
   boxShadow: 24,
@@ -39,86 +29,95 @@ const style = {
 
 export default function ContentPage() {
   const [open, setOpen] = useState(false);
-  // const handleOpen = () => setOpen(true);
+  const [terms, setTerms] = useState({});
+  const [privacy, setPrivacy] = useState({});
+  const [payload, setPayload] = useState({ privacypolicy: '', termscondition: '' });
+
   const handleClose = () => setOpen(false);
-  const [terms, setterms] = useState({});
-  const [privacy, setprivacy] = useState({});
-  const handleprivacy = () => {
-    setOpen(true);
-    setpayload({ privacypolicy: privacy.privacypolicy, termscondition: '' });
-  };
-  const handleterms = () => {
-    setOpen(true);
-    setpayload({ privacypolicy: '', termscondition: terms.termscondition });
-  };
-  const [payload, setpayload] = useState({
-    privacypolicy: '',
-    termscondition: '',
-  });
-  const getdata = async () => {
-    const data = await getPrivacy();
 
-    setprivacy(data);
-    const data1 = await getTerms();
-    setterms(data1);
+  const handlePrivacy = () => {
+    setOpen(true);
+    setPayload({ privacypolicy: privacy.privacypolicy, termscondition: '' });
   };
+
+  const handleTerms = () => {
+    setOpen(true);
+    setPayload({ privacypolicy: '', termscondition: terms.termscondition });
+  };
+
+  const handlePayloadUpdate = (e) => {
+    if (payload.termscondition !== '') {
+      setPayload({ termscondition: e.target.value, privacypolicy: '' });
+    } else {
+      setPayload({ termscondition: '', privacypolicy: e.target.value });
+    }
+  };
+
+  const getData = async () => {
+    const querySnapshot = await getDocs(collection(db, "content"));
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.type === "terms") {
+        setTerms({ ...data, id: doc.id });
+      } else if (data.type === "privacy") {
+        setPrivacy({ ...data, id: doc.id });
+      }
+    });
+  };
+
+  const updateContent = async () => {
+    try {
+      let docRef;
+      if (payload.termscondition !== '') {
+        if (terms.id) {
+          // Update existing Terms document
+          docRef = doc(db, "content", terms.id);
+          await updateDoc(docRef, { termscondition: payload.termscondition });
+        } else {
+          // Add new Terms document
+          docRef = doc(collection(db, "content"));
+          await setDoc(docRef, { type: "terms", termscondition: payload.termscondition });
+        }
+      } else if (payload.privacypolicy !== '') {
+        if (privacy.id) {
+          // Update existing Privacy document
+          docRef = doc(db, "content", privacy.id);
+          await updateDoc(docRef, { privacypolicy: payload.privacypolicy });
+        } else {
+          // Add new Privacy document
+          docRef = doc(collection(db, "content"));
+          await setDoc(docRef, { type: "privacy", privacypolicy: payload.privacypolicy });
+        }
+      }
+  
+      setOpen(false);
+      setPayload({ privacypolicy: '', termscondition: '' });
+      getData(); // Refresh the data after update
+    } catch (error) {
+      console.error("Error adding or updating document: ", error);
+    }
+  };
+  
+
   useEffect(() => {
-    getdata();
+    getData();
   }, []);
-  const handlepayloadupdate = (e) => {
-    if (payload.termscondition !== '') {
-      setpayload({ termscondition: e.target.value, privacypolicy: '' });
-    } else {
-      setpayload({ termscondition: '', privacypolicy: e.target.value });
-    }
-  };
-  const updatecontent = async () => {
-    if (payload.termscondition !== '') {
-      const resp = await updateTerms(terms._id, { termscondition: payload.termscondition });
-      if (resp.status === true) {
-        setOpen(false);
-        setpayload({
-          privacypolicy: '',
-          termscondition: '',
-        });
-        getdata();
-      }
-    } else {
-      const resp = await updatePrivacy(privacy._id, { privacypolicy: payload.privacypolicy });
-      if (resp.status === true) {
-        setOpen(false);
 
-        setpayload({
-          privacypolicy: '',
-          termscondition: '',
-        });
-        getdata();
-      }
-    }
-  };
   return (
- <><Typography variant="h4" sx={{ mb: 5 }}>
+    <>
+      <Typography variant="h4" sx={{ mb: 5 }}>
         Content
       </Typography>
+
       <Card>
         <CardContent>
           <Typography sx={{ fontSize: 24 }} color="text.secondary" gutterBottom>
-          Terms and Conditions
+            Terms and Conditions
           </Typography>
-          {/* <Typography variant="h5" component="div">
-          be{bull}nev{bull}o{bull}lent
-        </Typography> */}
-          {/* <Typography sx={{ mb: 1.5 }} color="text.secondary">
-          adjective
-        </Typography> */}
-          <Typography variant="body2">
-            {terms.termscondition}
-            {/* <br />
-          {'"a benevolent smile"'} */}
-          </Typography>
+          <Typography variant="body2">{terms.termscondition}</Typography>
         </CardContent>
         <CardActions sx={{ float: 'right' }}>
-          <Button size="large" onClick={handleterms}>
+          <Button size="large" onClick={handleTerms}>
             Edit Terms And Condition
           </Button>
         </CardActions>
@@ -129,27 +128,15 @@ export default function ContentPage() {
           <Typography sx={{ fontSize: 24 }} color="text.secondary" gutterBottom>
             Privacy Policy
           </Typography>
-          {/* <Typography variant="h5" component="div">
-          be{bull}nev{bull}o{bull}lent
-        </Typography> */}
-          {/* <Typography sx={{ mb: 1.5 }} color="text.secondary">
-          adjective
-        </Typography> */}
-          <Typography variant="body2">
-            {privacy.privacypolicy}
-            {/* <br />
-          {'"a benevolent smile"'} */}
-          </Typography>
+          <Typography variant="body2">{privacy.privacypolicy}</Typography>
         </CardContent>
         <CardActions sx={{ float: 'right' }}>
-          <Button size="large" onClick={handleprivacy}>
-            Edit Privacy And Policy
+          <Button size="large" onClick={handlePrivacy}>
+            Edit Privacy Policy
           </Button>
         </CardActions>
       </Card>
 
-      {/* <ProductList products={PRODUCTS} /> */}
-      {/* <ProductCartWidget /> */}
       <Modal
         open={open}
         onClose={handleClose}
@@ -158,22 +145,25 @@ export default function ContentPage() {
       >
         <Box sx={style}>
           <Typography id="modal-modal-title" variant="h6" component="h2">
-            {payload.privacypolicy !== '' ? 'Privacy Policy' : 'Term And Condition'}
+            {payload.privacypolicy !== '' ? 'Privacy Policy' : 'Terms and Conditions'}
           </Typography>
           <TextareaAutosize
-            // aria-label="empty textarea"
-            placeholder={payload.privacypolicy !== '' ? 'Privacy Policy' : 'Term And Condition'}
-            onChange={handlepayloadupdate}
-            style={{ width: '90%', height: 'auto', ml:10, border: '1px solid blue' ,borderRadius:20, borderShadow:"rgba(0, 0, 0, 0.35) 0px 5px 15px", padding:"6px",marginTop:"10px" }}
-
-            // cols={12}
+            placeholder={payload.privacypolicy !== '' ? 'Privacy Policy' : 'Terms and Conditions'}
+            onChange={handlePayloadUpdate}
+            style={{
+              width: '90%',
+              height: 'auto',
+              border: '1px solid blue',
+              borderRadius: 20,
+              padding: '6px',
+              marginTop: '10px',
+            }}
             rows={12}
             value={payload.privacypolicy !== '' ? payload.privacypolicy : payload.termscondition}
           />
-          <Button onClick={updatecontent}>Update</Button>
+          <Button onClick={updateContent}>Update</Button>
         </Box>
       </Modal>
-      </>
-      
+    </>
   );
 }

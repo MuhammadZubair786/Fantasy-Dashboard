@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import { Delete, Edit, ArrowDownward, ArrowUpward } from '@mui/icons-material';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc,setDoc } from 'firebase/firestore';
+import axios from 'axios';
 
 import TableLoading from '../components/table-loading/tableLoading';
 import { db } from '../service/firebase-config';
@@ -44,6 +45,8 @@ const StandingLeagues = () => {
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [expandedLeague, setExpandedLeague] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
 
   const leaguesCollection = collection(db, 'leaguesStanding');
 
@@ -59,90 +62,42 @@ const StandingLeagues = () => {
 
   // Simulate fetching data
   useEffect(() => {
-    // setTimeout(() => {
-    //   setLeagues([
-    //     {
-    //       id: 1,
-    //       leagueName: 'Premier League',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/8/8e/Premier_League_Logo.png',
-    //       description: 'The Premier League is the top professional football division in England.',
-    //       teams: ['Manchester United', 'Chelsea', 'Liverpool', 'Manchester City', 'Arsenal'],
-    //     },
-    //     {
-    //       id: 2,
-    //       leagueName: 'La Liga',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/4/47/La_Liga_logo.svg',
-    //       description: 'La Liga is the top professional football division of the Spanish football league system.',
-    //       teams: ['Real Madrid', 'Barcelona', 'Atletico Madrid', 'Sevilla', 'Valencia'],
-    //     },
-    //     {
-    //       id: 3,
-    //       leagueName: 'Serie A',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/e/e1/Serie_A_logo_2021.svg',
-    //       description: 'Serie A is the top professional football division in Italy.',
-    //       teams: ['Juventus', 'AC Milan', 'Inter Milan', 'AS Roma', 'Napoli'],
-    //     },
-    //     {
-    //       id: 4,
-    //       leagueName: 'Bundesliga',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/2/2e/Bundesliga_Logo_2010.svg',
-    //       description: 'The Bundesliga is the top professional football division in Germany.',
-    //       teams: ['Bayern Munich', 'Borussia Dortmund', 'RB Leipzig', 'Bayer Leverkusen', 'Wolfsburg'],
-    //     },
-    //     {
-    //       id: 5,
-    //       leagueName: 'Ligue 1',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/Ligue_1_logo.svg',
-    //       description: 'Ligue 1 is the top professional football division in France.',
-    //       teams: ['Paris Saint-Germain', 'Marseille', 'Lyon', 'Monaco', 'Lille'],
-    //     },
-    //     {
-    //       id: 6,
-    //       leagueName: 'MLS',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/5/57/Major_League_Soccer_logo.svg',
-    //       description: 'Major League Soccer is the top professional football division in the United States.',
-    //       teams: ['LA Galaxy', 'Seattle Sounders', 'New York Red Bulls', 'Atlanta United', 'Toronto FC'],
-    //     },
-    //     {
-    //       id: 7,
-    //       leagueName: 'Brazilian Serie A',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Brazilian_Football_Championship_logo.svg',
-    //       description: 'The Brazilian Serie A is the top division of professional football in Brazil.',
-    //       teams: ['Flamengo', 'Palmeiras', 'São Paulo', 'Corinthians', 'Vasco da Gama'],
-    //     },
-    //     {
-    //       id: 8,
-    //       leagueName: 'Argentina Primera Division',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/7/75/Argentine_Primer_Divisi%C3%B3n_logo.svg',
-    //       description: 'The Argentine Primera Division is the top professional football division in Argentina.',
-    //       teams: ['Boca Juniors', 'River Plate', 'Independiente', 'Racing Club', 'San Lorenzo'],
-    //     },
-    //     {
-    //       id: 9,
-    //       leagueName: 'Portuguese Primeira Liga',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Liga_Pro_logo.png',
-    //       description: 'The Primeira Liga is the top division of professional football in Portugal.',
-    //       teams: ['Benfica', 'Porto', 'Sporting CP', 'Braga', 'Vitoria Guimarães'],
-    //     },
-    //     {
-    //       id: 10,
-    //       leagueName: 'Dutch Eredivisie',
-    //       leagueImage: 'https://upload.wikimedia.org/wikipedia/commons/3/3b/Eredivisie_logo_2017.svg',
-    //       description: 'The Eredivisie is the top professional football league in the Netherlands.',
-    //       teams: ['Ajax', 'PSV Eindhoven', 'Feyenoord', 'AZ Alkmaar', 'Vitesse'],
-    //     },
-    //   ]);
-    //   setIsLoading(false);
-    // }, 1000);
+    
     fetchLeagues()
   }, []);
 
+
+  const uploadImageToCloudinary = async (imageFile) => {
+    const formData = new FormData();
+    formData.append('file', imageFile);
+    formData.append('upload_preset', 'newpresent'); // Replace with your Cloudinary upload preset
+
+    try {
+      const response = await axios.post(
+        `https://api.cloudinary.com/v1_1/dkfgfnbst/image/upload`, // Replace "your_cloud_name"
+        formData
+      );
+      return response.data.secure_url;
+    } catch (error) {
+      console.error('Error uploading image to Cloudinary:', error);
+      throw new Error('Image upload failed');
+    }
+  };
+
+
   const handleAddLeague = async () => {
+    setUploadingImage(true);
     if (!newLeagueName || !leagueImage || !leagueDescription) return;
+
+      let imageUrl = currentLeague?.imageUrl || '';
+      if (leagueImage) {
+        imageUrl = await uploadImageToCloudinary(leagueImage);
+      }
+   
 
     const newLeague = {
       leagueName: newLeagueName,
-      leagueImage,
+      imageUrl,
       description: leagueDescription,
       teams,
     };
@@ -372,19 +327,19 @@ const StandingLeagues = () => {
             fullWidth
             margin="dense"
           />
-          <TextField
-            label="Image URL"
-            value={leagueImage}
-            onChange={(e) => setLeagueImage(e.target.value)}
-            fullWidth
-            margin="dense"
-          />
+          
           <TextField
             label="Description"
             value={leagueDescription}
             onChange={(e) => setLeagueDescription(e.target.value)}
             fullWidth
             margin="dense"
+          />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setLeagueImage(e.target.files[0])}
+            style={{ marginTop: 10 }}
           />
           <TextField
             label="Team Name"

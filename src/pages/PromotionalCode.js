@@ -22,6 +22,9 @@ import {
   Paper,
 } from '@mui/material';
 import { Add, Edit, Delete, CheckCircle, Cancel } from '@mui/icons-material';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../service/firebase-config';
+
 
 const RosterManagementPage = () => {
   const [wrestlers, setWrestlers] = useState([]);
@@ -32,33 +35,40 @@ const RosterManagementPage = () => {
   const [loading, setLoading] = useState(false);
   const [editWrestler, setEditWrestler] = useState(null);
 
+  const wrestlersCollection = collection(db, 'wrestlers');
+
+  // Fetch wrestlers from Firebase
   useEffect(() => {
-    // Simulate fetching wrestlers from an API (replace with real API call)
-    setLoading(true);
-    setTimeout(() => {
-      setWrestlers([
-        { id: 1, name: 'John Doe', score: 10, rank: 5, status: 'Active' },
-        { id: 2, name: 'Jane Smith', score: 15, rank: 3, status: 'Bench' },
-        { id: 3, name: 'Tommy Lee', score: 8, rank: 7, status: 'Active' },
-        // Add more wrestlers as needed
-      ]);
+    const fetchWrestlers = async () => {
+      setLoading(true);
+      const data = await getDocs(wrestlersCollection);
+      setWrestlers(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
       setLoading(false);
-    }, 3000);
+    };
+
+    fetchWrestlers();
   }, []);
 
-  const handleAddWrestler = () => {
+  const handleAddWrestler = async () => {
     if (wrestlers.length >= 20) {
       setSnackbarMessage('Roster limit reached. You cannot add more than 20 wrestlers.');
       setSnackbarOpen(true);
       return;
     }
 
-    const newWrestlerData = { ...newWrestler, id: wrestlers.length + 1 };
-    setWrestlers((prevWrestlers) => [...prevWrestlers, newWrestlerData]);
-    setSnackbarMessage('Wrestler added successfully!');
-    setSnackbarOpen(true);
-    setNewWrestler({ name: '', score: 0, rank: 0, status: 'Bench' });
-    setIsDialogOpen(false);
+    try {
+      await addDoc(wrestlersCollection, newWrestler);
+      setSnackbarMessage('Wrestler added successfully!');
+      setSnackbarOpen(true);
+      setNewWrestler({ name: '', score: 0, rank: 0, status: 'Bench' });
+      setIsDialogOpen(false);
+
+      // Refresh data
+      const data = await getDocs(wrestlersCollection);
+      setWrestlers(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    } catch (error) {
+      console.error('Error adding wrestler:', error);
+    }
   };
 
   const handleEditWrestler = (wrestler) => {
@@ -67,30 +77,52 @@ const RosterManagementPage = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSaveWrestler = () => {
-    setWrestlers((prevWrestlers) =>
-      prevWrestlers.map((wrestler) =>
-        wrestler.id === editWrestler.id ? { ...wrestler, ...newWrestler } : wrestler
-      )
-    );
-    setSnackbarMessage('Wrestler updated successfully!');
-    setSnackbarOpen(true);
-    setEditWrestler(null);
-    setIsDialogOpen(false);
+  const handleSaveWrestler = async () => {
+    try {
+      const wrestlerDoc = doc(db, 'wrestlers', editWrestler.id);
+      await updateDoc(wrestlerDoc, newWrestler);
+      setSnackbarMessage('Wrestler updated successfully!');
+      setSnackbarOpen(true);
+      setEditWrestler(null);
+      setIsDialogOpen(false);
+
+      // Refresh data
+      const data = await getDocs(wrestlersCollection);
+      setWrestlers(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    } catch (error) {
+      console.error('Error updating wrestler:', error);
+    }
   };
 
-  const handleDeleteWrestler = (id) => {
-    setWrestlers((prevWrestlers) => prevWrestlers.filter((wrestler) => wrestler.id !== id));
-    setSnackbarMessage('Wrestler deleted successfully!');
-    setSnackbarOpen(true);
+  const handleDeleteWrestler = async (id) => {
+    try {
+      const wrestlerDoc = doc(db, 'wrestlers', id);
+      await deleteDoc(wrestlerDoc);
+      setSnackbarMessage('Wrestler deleted successfully!');
+      setSnackbarOpen(true);
+
+      // Refresh data
+      const data = await getDocs(wrestlersCollection);
+      setWrestlers(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    } catch (error) {
+      console.error('Error deleting wrestler:', error);
+    }
   };
 
-  const handleToggleStatus = (id) => {
-    setWrestlers((prevWrestlers) =>
-      prevWrestlers.map((wrestler) =>
-        wrestler.id === id ? { ...wrestler, status: wrestler.status === 'Active' ? 'Bench' : 'Active' } : wrestler
-      )
-    );
+  const handleToggleStatus = async (id) => {
+    const wrestler = wrestlers.find((w) => w.id === id);
+    const newStatus = wrestler.status === 'Active' ? 'Bench' : 'Active';
+
+    try {
+      const wrestlerDoc = doc(db, 'wrestlers', id);
+      await updateDoc(wrestlerDoc, { status: newStatus });
+
+      // Refresh data
+      const data = await getDocs(wrestlersCollection);
+      setWrestlers(data.docs.map((doc) => ({ ...doc.data(), id: doc.id })));
+    } catch (error) {
+      console.error('Error toggling status:', error);
+    }
   };
 
   return (
@@ -125,13 +157,13 @@ const RosterManagementPage = () => {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">
-                  <CircularProgress sx={{ display: 'block', margin: '0 auto' }} />
+                <TableCell colSpan={4} align="center">
+                  <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : wrestlers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center">
+                <TableCell colSpan={4} align="center">
                   No wrestlers available.
                 </TableCell>
               </TableRow>
@@ -141,17 +173,6 @@ const RosterManagementPage = () => {
                   <TableCell>{wrestler.name}</TableCell>
                   <TableCell>{wrestler.score}</TableCell>
                   <TableCell>{wrestler.rank}</TableCell>
-                  {/* <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: wrestler.status === 'Active' ? '#2E7D32' : '#E57373',
-                        fontWeight: 'bold',
-                      }}
-                    >
-                      {wrestler.status}
-                    </Typography>
-                  </TableCell> */}
                   <TableCell>
                     <Tooltip title="Edit">
                       <IconButton color="primary" onClick={() => handleEditWrestler(wrestler)}>
@@ -164,10 +185,7 @@ const RosterManagementPage = () => {
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Toggle Status">
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleToggleStatus(wrestler.id)}
-                      >
+                      <IconButton color="primary" onClick={() => handleToggleStatus(wrestler.id)}>
                         {wrestler.status === 'Active' ? <Cancel /> : <CheckCircle />}
                       </IconButton>
                     </Tooltip>
@@ -197,7 +215,7 @@ const RosterManagementPage = () => {
             type="number"
             fullWidth
             value={newWrestler.score}
-            onChange={(e) => setNewWrestler({ ...newWrestler, score: e.target.value })}
+            onChange={(e) => setNewWrestler({ ...newWrestler, score: +e.target.value })}
             sx={{ mb: 2 }}
           />
           <TextField
@@ -206,23 +224,9 @@ const RosterManagementPage = () => {
             type="number"
             fullWidth
             value={newWrestler.rank}
-            onChange={(e) => setNewWrestler({ ...newWrestler, rank: e.target.value })}
+            onChange={(e) => setNewWrestler({ ...newWrestler, rank: +e.target.value })}
             sx={{ mb: 2 }}
           />
-          {/* <TextField
-            select
-            label="Status"
-            value={newWrestler.status}
-            onChange={(e) => setNewWrestler({ ...newWrestler, status: e.target.value })}
-            fullWidth
-            sx={{ mb: 2 }}
-            SelectProps={{
-              native: true,
-            }}
-          >
-            <option value="Active">Active</option>
-            <option value="Bench">Bench</option>
-          </TextField> */}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setIsDialogOpen(false)} color="primary">

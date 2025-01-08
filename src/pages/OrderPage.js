@@ -78,6 +78,8 @@ const LeaguesApprovalPage = () => {
   // Call the function to add static leagues
   // addStaticLeagues();
 
+  
+
   // Fetch leagues data from Firestore
   useEffect(() => {
     const fetchLeagues = async () => {

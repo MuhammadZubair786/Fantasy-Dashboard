@@ -10,7 +10,6 @@ import {
   TextField,
   Typography,
   Snackbar,
-  
   Alert,
   Paper,
   Grid,
@@ -36,11 +35,13 @@ import TableLoading from '../components/table-loading/tableLoading';
 
 const ActiveMatchPage = () => {
   const [matches, setMatches] = useState([]);
-  const [laoding,setloading] =useState(true)
-   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentMatch, setCurrentMatch] = useState(null);
-  const [team1, setTeam1] = useState('');
-  const [team2, setTeam2] = useState('');
+  const [team1Name, setTeam1Name] = useState('');
+  const [team2Name, setTeam2Name] = useState('');
+  const [team1, setTeam1] = useState([{ name: '' }]);
+  const [team2, setTeam2] = useState([{ name: '' }]);
   const [team1Score, setTeam1Score] = useState(0);
   const [team2Score, setTeam2Score] = useState(0);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -50,33 +51,36 @@ const ActiveMatchPage = () => {
 
   // Fetch matches from Firestore
   const fetchMatches = async () => {
-
-
     const querySnapshot = await getDocs(matchesCollection);
     const matchesData = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
     setMatches(matchesData);
-    setloading(false)
+    console.log(matchesData)
+    setLoading(false);
   };
 
   useEffect(() => {
-    setloading(true)
+    setLoading(true);
     fetchMatches();
   }, []);
 
   const handleOpenDialog = (match = null) => {
     if (match) {
       setCurrentMatch(match);
+      setTeam1Name(match.team1Name);
+      setTeam2Name(match.team2Name);
       setTeam1(match.team1);
       setTeam2(match.team2);
       setTeam1Score(match.team1Score);
       setTeam2Score(match.team2Score);
     } else {
       setCurrentMatch(null);
-      setTeam1('');
-      setTeam2('');
+      setTeam1Name('');
+      setTeam2Name('');
+      setTeam1([{ name: '' }]);
+      setTeam2([{ name: '' }]);
       setTeam1Score(0);
       setTeam2Score(0);
     }
@@ -87,11 +91,45 @@ const ActiveMatchPage = () => {
     setIsDialogOpen(false);
   };
 
+  const handleAddPlayer = (team) => {
+    if (team === 'team1') {
+      setTeam1([...team1, { name: '' }]);
+    } else {
+      setTeam2([...team2, { name: '' }]);
+    }
+  };
+
+  const handleRemovePlayer = (team, index) => {
+    if (team === 'team1') {
+      const updatedTeam1 = team1.filter((_, i) => i !== index);
+      setTeam1(updatedTeam1);
+    } else {
+      const updatedTeam2 = team2.filter((_, i) => i !== index);
+      setTeam2(updatedTeam2);
+    }
+  };
+
+  const handlePlayerChange = (team, index, value) => {
+    if (team === 'team1') {
+      const updatedTeam1 = [...team1];
+      updatedTeam1[index].name = value;
+      setTeam1(updatedTeam1);
+    } else {
+      const updatedTeam2 = [...team2];
+      updatedTeam2[index].name = value;
+      setTeam2(updatedTeam2);
+    }
+  };
+
   const handleSaveMatch = async () => {
     if (currentMatch) {
       // Update match in Firestore
       const matchDoc = doc(db, 'matches', currentMatch.id);
       await updateDoc(matchDoc, {
+        team1Name,
+        team2Name,
+        team1,
+        team2,
         team1Score,
         team2Score,
       });
@@ -99,6 +137,8 @@ const ActiveMatchPage = () => {
     } else {
       // Add new match to Firestore
       await addDoc(matchesCollection, {
+        team1Name,
+        team2Name,
         team1,
         team2,
         team1Score,
@@ -129,13 +169,6 @@ const ActiveMatchPage = () => {
     );
   };
 
-  const TABLE_HEAD = [
-    { id: 'teamName', label: 'Team Name', alignRight: false },
-    { id: 'teamLogo', label: 'Team Logo', alignRight: false },
-    { id: 'actions', label: 'Actions', alignRight: false },
-  ];
-
-
   return (
     <Box sx={{ padding: 3 }}>
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold' }}>
@@ -152,28 +185,28 @@ const ActiveMatchPage = () => {
       </Button>
 
       <Grid container spacing={3}>
-      {
-      laoding ? 
-       <TableContainer sx={{ minWidth: 800 }}>
-       <Table>
-         <TableBody>
-           <TableLoading tableHeading={TABLE_HEAD} />
-         </TableBody>
-       </Table>
-     </TableContainer>
-      :
-        matches.length === 0 ? (
-          <Typography style={{margin:"20px"}}>No active matches available. Add a match to get started!</Typography>
+        {loading ? (
+          <TableContainer sx={{ minWidth: 800 }}>
+            <Table>
+              <TableBody>
+                <TableLoading />
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : matches.length === 0 ? (
+          <Typography style={{ margin: '20px' }}>
+            No active matches available. Add a match to get started!
+          </Typography>
         ) : (
           matches.map((match) => (
             <Grid item xs={12} md={6} key={match.id}>
               <Paper sx={{ padding: 2, borderRadius: 2, boxShadow: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <Avatar sx={{ width: 60, height: 60, mr: 2 }}>
-                    {match.team1.charAt(0)}
+                    {match.team1[0].name.charAt(0)}
                   </Avatar>
                   <Typography variant="h6" sx={{ fontWeight: 'bold', flexGrow: 1 }}>
-                    {match.team1} vs {match.team2}
+                    {match.team1Name} vs {match.team2Name}
                   </Typography>
                   <Typography sx={{ fontWeight: 'bold', color: '#f87203' }}>
                     {match.team1Score} - {match.team2Score}
@@ -195,7 +228,28 @@ const ActiveMatchPage = () => {
 
                 <Collapse in={match.isExpanded}>
                   <Typography variant="body2" sx={{ mt: 2, color: 'gray' }}>
-                    {match.matchDetails}
+                  <Box sx={{ mt: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            {match.team1Name} Players:
+          </Typography>
+          <ul>
+            {match.team1.map((player, index) => (
+              <li key={index}>{player.name}</li>
+            ))}
+          </ul>
+        </Box>
+
+        {/* Show Team 2 Players */}
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+            {match.team2Name} Players:
+          </Typography>
+          <ul>
+            {match.team2.map((player, index) => (
+              <li key={index}>{player.name}</li>
+            ))}
+          </ul>
+        </Box>
                   </Typography>
                 </Collapse>
 
@@ -215,27 +269,70 @@ const ActiveMatchPage = () => {
             </Grid>
           ))
         )}
-      
       </Grid>
 
       {/* Dialog for adding/editing match */}
       <Dialog open={isDialogOpen} onClose={handleCloseDialog}>
         <DialogTitle>{currentMatch ? 'Edit Match' : 'Add New Match'}</DialogTitle>
         <DialogContent>
+          {/* Team 1 Name Input */}
           <TextField
-            label="Team 1"
-            value={team1}
-            onChange={(e) => setTeam1(e.target.value)}
+            label="Team 1 Name"
+            value={team1Name}
+            onChange={(e) => setTeam1Name(e.target.value)}
             fullWidth
             margin="dense"
           />
+
+          {/* Render inputs for team1 players */}
+          <Typography variant="h6">Team 1 Players</Typography>
+          {team1.map((player, index) => (
+            <Box key={index}>
+              <TextField
+                label={`Player ${index + 1} Name`}
+                value={player.name}
+                onChange={(e) => handlePlayerChange('team1', index, e.target.value)}
+                fullWidth
+                margin="dense"
+              />
+              <Button onClick={() => handleRemovePlayer('team1', index)} color="error">
+                Remove Player
+              </Button>
+            </Box>
+          ))}
+          <Button onClick={() => handleAddPlayer('team1')} color="primary">
+            Add Player to Team 1
+          </Button>
+
+          {/* Team 2 Name Input */}
           <TextField
-            label="Team 2"
-            value={team2}
-            onChange={(e) => setTeam2(e.target.value)}
+            label="Team 2 Name"
+            value={team2Name}
+            onChange={(e) => setTeam2Name(e.target.value)}
             fullWidth
             margin="dense"
           />
+
+          {/* Render inputs for team2 players */}
+          <Typography variant="h6">Team 2 Players</Typography>
+          {team2.map((player, index) => (
+            <Box key={index}>
+              <TextField
+                label={`Player ${index + 1} Name`}
+                value={player.name}
+                onChange={(e) => handlePlayerChange('team2', index, e.target.value)}
+                fullWidth
+                margin="dense"
+              />
+              <Button onClick={() => handleRemovePlayer('team2', index)} color="error">
+                Remove Player
+              </Button>
+            </Box>
+          ))}
+          <Button onClick={() => handleAddPlayer('team2')} color="primary">
+            Add Player to Team 2
+          </Button>
+
           <TextField
             label="Team 1 Score"
             type="number"

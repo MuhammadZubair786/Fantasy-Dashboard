@@ -25,10 +25,20 @@ import {
   Switch,
   Skeleton,
 } from '@mui/material';
+
 // components
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import TableLoading from '../components/table-loading/tableLoading';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  doc,
+} from 'firebase/firestore';
+import { db } from '../service/firebase-config';
 import Iconify from '../components/iconify';
 import Scrollbar from '../components/scrollbar';
 // sections
@@ -39,14 +49,17 @@ import { deleteSelectedUser, getUsers } from '../service/user.service';
 
 import { imgURL } from '../service/config';
 
+
+import TableLoading from '../components/table-loading/tableLoading';
+
+
 // ----------------------------------------------------------------------
 
 const TABLE_HEAD = [
   { id: 'profile.image.file', label: 'Image', alignRight: false },
   { id: 'profile.fullName', label: 'Name', alignRight: false },
-  { id: 'isCompleteProfile', label: 'Role', alignRight: false },
+  { id: 'isCompleteProfile', label: 'Email', alignRight: false },
   { id: 'userType', label: 'Profile Complete', alignRight: false },
-  { id: 'status', label: 'Posts', alignRight: false },
   { id: 'isBlocked', label: 'Account Status', alignRight: false },
   { id: 'Action', label: 'Action', alignRight: false },
 
@@ -124,6 +137,21 @@ export default function UserPage() {
 
   const [isDeleteLoading, setIsDeleteLoading] = useState(false);
   const [isLoading, setIslaoading] = useState(false);
+
+  const [users,setusers] =useState([])
+
+  const getAllusers=async()=>{
+    const draftsCollection = collection(db, 'users');
+
+    const querySnapshot = await getDocs(draftsCollection);
+    const fetchedMembers = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    setusers(fetchedMembers);
+
+  
+}
 
   const handleOpenMenu = (event) => {
     setid(event.currentTarget.value);
@@ -576,6 +604,7 @@ export default function UserPage() {
   };
   useEffect(() => {
     getdata();
+    getAllusers()
   }, [deleteUser]);
 
   return (
@@ -624,9 +653,10 @@ export default function UserPage() {
               <TableBody>
                 {isLoading ? <TableLoading tableHeading={TABLE_HEAD} /> : ''}
                 <>
-                  {filteredUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row) => {
+                  {users.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row) => {
                     // const { _id, name, role, status, company, avatarUrl, isVerified } = row;
                     const selectedUser = selected.indexOf(row._id) !== -1;
+                    console.log(row)
 
                     return (
                       <TableRow hover key={row._id} tabIndex={-1} role="checkbox" selected={selectedUser}>
@@ -650,11 +680,11 @@ export default function UserPage() {
                                   bgcolor: stringToColor(row.profile?.fullName),
                                 }}
                                 children={
-                                  row.profile?.fullName.split(' ').length > 1
-                                    ? `${row.profile?.fullName.split(' ')[0][0]}${
-                                        row.profile.fullName.split(' ')[1][0]
+                                  row.fullName.split(' ').length > 1
+                                    ? `${row.fullName.split(' ')[0][0]}${
+                                        row.fullName.split(' ')[1][0]
                                       }`
-                                    : `${row.profile?.fullName.split(' ')[0][0]}`
+                                    : `${row.fullName.split(' ')[0][0]}`
                                 }
                               />
                             )}
@@ -663,15 +693,15 @@ export default function UserPage() {
                         <TableCell component="th" scope="row" padding="none">
                           <Stack direction="row" alignItems="center" spacing={2}>
                             <Typography variant="subtitle2" noWrap>
-                              {row.profile?.fullName}
+                              {row.fullName}
                             </Typography>
                           </Stack>
                         </TableCell>
-                        <TableCell align="left">{row.userType}</TableCell>
+                        <TableCell align="left">{row.email}</TableCell>
 
-                        <TableCell align="left">{row.isCompleteProfile ? 'Complete' : 'Pending'}</TableCell>
+                        <TableCell align="left">{'Complete'}</TableCell>
 
-                        <TableCell align="left">{row.profile?.post?.length}</TableCell>
+                        
 
                         {/* <TableCell align="left">
                           <Label color={(status === 'banned' && 'error') || 'success'}>{sentenceCase(status)}</Label>

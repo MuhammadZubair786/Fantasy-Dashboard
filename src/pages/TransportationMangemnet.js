@@ -83,19 +83,33 @@ const draftsCollection = collection(db, 'drafts');
 
   // Start the draft timer
   const handleStartDraft = async () => {
+    const timerSet = prompt("Enter Timer ")
     setIsDraftActive(true);
     const startTime = new Date();
     setDraftStartDate(startTime.toLocaleString());  // Store the start time
-    setDraftTimer(10);  // Starting timer at 60 seconds for demo
+    setDraftTimer(timerSet);  // Starting timer at 60 seconds for demo
+    const querySnapshot = await getDocs(membersCollection);
+    const fetchedMembers = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
 
+    const newDocRef = doc(draftsCollection);
+
+    // Get the auto-generated document ID
+    const draftId = newDocRef.id;
+
+    // Create the draft object, including the draftId
     const newDraft = {
+      draftId, // Store the draftId
       startTime: startTime.toLocaleString(),
       endTime: null,
       isActive: true,
-      members: [], // Empty list of members initially
+      timer:timerSet,
+      members: fetchedMembers, // Empty list of members initially
     };
 
-    const newDocRef = doc(draftsCollection);
+    // Save the draft to Firestore
     await setDoc(newDocRef, newDraft);
     setcurrentdraftId(newDocRef.id)
 
@@ -181,7 +195,7 @@ const draftsCollection = collection(db, 'drafts');
           : draft
       )
     );
-    updateDraftStatus(endTime); // Update draft in Firestore
+    // updateDraftStatus(endTime); // Update draft in Firestore
   };
 
   const handleAddMember = async () => {

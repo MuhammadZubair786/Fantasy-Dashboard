@@ -163,6 +163,7 @@ const LeaguesApprovalPage = () => {
               ))
             ) : (
               leagues.map((league) => (
+                league.userEmail ?
                 <TableRow key={league.id}>
                   <TableCell>{league.leagueName}</TableCell>
                   <TableCell>{league.userName}</TableCell>
@@ -228,6 +229,7 @@ const LeaguesApprovalPage = () => {
                     )}
                   </TableCell>
                 </TableRow>
+                :null
               ))
             )}
           </TableBody>

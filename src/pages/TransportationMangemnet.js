@@ -23,16 +23,8 @@ import {
   TableHead,
   TableRow,
   Skeleton,
-} from '@mui/material'
-import {
-  collection,
-  addDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  setDoc,
-  doc,
-} from 'firebase/firestore';
+} from '@mui/material';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, setDoc, doc, query, where } from 'firebase/firestore';
 import { db } from '../service/firebase-config';
 
 const DraftWrestlingAdminPage = () => {
@@ -42,22 +34,21 @@ const DraftWrestlingAdminPage = () => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDraftActive, setIsDraftActive] = useState(false);
-  const [draftTimer, setDraftTimer] = useState(0);  // Timer in seconds
+  const [draftTimer, setDraftTimer] = useState(0); // Timer in seconds
   const [loading, setLoading] = useState(true); // Simulate loading state
   const [editMember, setEditMember] = useState(null); // For editing members
   const [drafts, setDrafts] = useState([]); // Track all drafts
   const [draftStartDate, setDraftStartDate] = useState(null); // Store draft start date
   const [showDraftDetails, setShowDraftDetails] = useState(null); // For showing draft details
-  const [currentdraftId, setcurrentdraftId] = useState(""); // For showing draft details
-
+  const [currentdraftId, setcurrentdraftId] = useState(''); // For showing draft details
 
   const intervalRef = useRef(null);
   const membersCollection = collection(db, 'members');
-const draftsCollection = collection(db, 'drafts');
+  const draftsCollection = collection(db, 'drafts');
   // Fetch members from Firestore
   const fetchMembers = async () => {
     const querySnapshot = await getDocs(membersCollection);
-    const fetchedMembers = querySnapshot.docs.map(doc => ({
+    const fetchedMembers = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
@@ -68,7 +59,7 @@ const draftsCollection = collection(db, 'drafts');
   // Fetch drafts from Firestore
   const fetchDrafts = async () => {
     const querySnapshot = await getDocs(draftsCollection);
-    const fetchedDrafts = querySnapshot.docs.map(doc => ({
+    const fetchedDrafts = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
@@ -83,13 +74,13 @@ const draftsCollection = collection(db, 'drafts');
 
   // Start the draft timer
   const handleStartDraft = async () => {
-    const timerSet = prompt("Enter Timer ")
+    const timerSet = prompt('Enter Timer ');
     setIsDraftActive(true);
     const startTime = new Date();
-    setDraftStartDate(startTime.toLocaleString());  // Store the start time
-    setDraftTimer(timerSet);  // Starting timer at 60 seconds for demo
+    setDraftStartDate(startTime.toLocaleString()); // Store the start time
+    setDraftTimer(timerSet); // Starting timer at 60 seconds for demo
     const querySnapshot = await getDocs(membersCollection);
-    const fetchedMembers = querySnapshot.docs.map(doc => ({
+    const fetchedMembers = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
@@ -105,20 +96,33 @@ const draftsCollection = collection(db, 'drafts');
       startTime: startTime.toLocaleString(),
       endTime: null,
       isActive: true,
-      timer:timerSet,
+      timer: timerSet,
       members: fetchedMembers, // Empty list of members initially
     };
 
     // Save the draft to Firestore
     await setDoc(newDocRef, newDraft);
-    setcurrentdraftId(newDocRef.id)
+    setcurrentdraftId(newDocRef.id);
 
     // const docRef = await setDoc(doc(draftsCollection), newDraft); // Save draft to Firestore
-    console.log(newDocRef)
-    setDrafts((prevDrafts) => [
-      ...prevDrafts,
-      { id: newDocRef.id, ...newDraft },
-    ]);
+    console.log(newDocRef);
+    setDrafts((prevDrafts) => [...prevDrafts, { id: newDocRef.id, ...newDraft }]);
+  };
+
+  const UpdateTimerDoc = async (prev) => {
+    const draftRef = doc(draftsCollection, currentdraftId); // Example: First draft
+    await updateDoc(draftRef, {
+      timer: prev - 1,
+    });
+  };
+
+  const handleDeleteLeague = async (leagueId) => {
+    const leagueDoc = doc(db, 'drafts', leagueId);
+
+    await deleteDoc(leagueDoc);
+    setSnackbarMessage('Delete Draft  successfully!');
+    setSnackbarOpen(true);
+    fetchDrafts()
   };
 
   // Timer countdown (every second)
@@ -128,9 +132,10 @@ const draftsCollection = collection(db, 'drafts');
         setDraftTimer((prev) => {
           if (prev <= 1) {
             clearInterval(intervalRef.current); // Clear the interval when timer reaches 0
-            handleStopDraft()
+            handleStopDraft();
             return 0;
           }
+          UpdateTimerDoc(prev);
           return prev - 1;
         });
       }, 1000);
@@ -144,19 +149,28 @@ const draftsCollection = collection(db, 'drafts');
   }, [isDraftActive, draftTimer]);
 
   const updateDraftStatus = async (endTime) => {
-    const querySnapshot = await getDocs(membersCollection);
-    const fetchedMembers = querySnapshot.docs.map(doc => ({
+    const draftsCollection = collection(db, 'drafts'); // Replace "drafts" with your collection name
+    const draftQuery = query(draftsCollection, where('draftId', '==', currentdraftId)); // Filter by draftId
+    const querySnapshot = await getDocs(draftQuery);
+
+    const fetchedDrafts = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
-    console.log("end ")
-    console.log(fetchedMembers)
-    const draftRef = doc(draftsCollection,currentdraftId);  // Example: First draft
+
+    console.log(fetchedDrafts[0]);
+
+    const draftRef = doc(draftsCollection, currentdraftId); // Example: First draft
     await updateDoc(draftRef, {
       endTime,
       isActive: false,
-      members:fetchedMembers
+      members: fetchedDrafts[0].members,
     });
+    const data = fetchedDrafts[0].members
+
+    setDrafts((prevDrafts) =>
+      prevDrafts.map((draft) => (draft.isActive ? { ...draft, endTime, isActive: false, members:data } : draft))
+    );
   };
 
   const handleEditMember = (member) => {
@@ -188,14 +202,8 @@ const draftsCollection = collection(db, 'drafts');
     setIsDraftActive(false);
     const endTime = new Date().toLocaleString();
     // Update draft status to completed and save the draft
-    setDrafts((prevDrafts) =>
-      prevDrafts.map((draft) =>
-        draft.isActive
-          ? { ...draft, endTime, isActive: false,members }
-          : draft
-      )
-    );
-    // updateDraftStatus(endTime); // Update draft in Firestore
+   
+    updateDraftStatus(endTime); // Update draft in Firestore
   };
 
   const handleAddMember = async () => {
@@ -204,7 +212,7 @@ const draftsCollection = collection(db, 'drafts');
       setSnackbarOpen(true);
       return;
     }
-  
+
     try {
       await addDoc(membersCollection, {
         name: newMember.name,
@@ -221,7 +229,6 @@ const draftsCollection = collection(db, 'drafts');
       setSnackbarOpen(true);
     }
   };
-  
 
   const handleShowDraftDetails = (draftId) => {
     const draftDetails = drafts.find((draft) => draft.id === draftId);
@@ -279,7 +286,7 @@ const draftsCollection = collection(db, 'drafts');
           setEditMember(null); // Reset edit member if adding new
           setIsDialogOpen(true);
         }}
-        disabled={isDraftActive}  // Disable button when draft is active
+        disabled={isDraftActive} // Disable button when draft is active
       >
         Add New Member
       </Button>
@@ -297,25 +304,23 @@ const draftsCollection = collection(db, 'drafts');
           </TableHead>
           <TableBody>
             {loading ? (
-
-                // Skeleton loader for the rows
-                Array.from({ length: 3 }).map((_, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      <Skeleton variant="text" width="100px" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton variant="text" width="120px" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton variant="text" width="180px" />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Skeleton variant="rectangular" width="80px" height="20px" />
-                    </TableCell>
-                   
-                  </TableRow>
-                ))
+              // Skeleton loader for the rows
+              Array.from({ length: 3 }).map((_, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <Skeleton variant="text" width="100px" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton variant="text" width="120px" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton variant="text" width="180px" />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Skeleton variant="rectangular" width="80px" height="20px" />
+                  </TableCell>
+                </TableRow>
+              ))
             ) : members.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center">
@@ -330,20 +335,12 @@ const draftsCollection = collection(db, 'drafts');
                   <TableCell>{member.rank}</TableCell>
                   <TableCell>
                     <Tooltip title="Edit">
-                      <IconButton
-                        color="primary"
-                        onClick={() => handleEditMember(member)}
-                        disabled={isDraftActive}
-                      >
+                      <IconButton color="primary" onClick={() => handleEditMember(member)} disabled={isDraftActive}>
                         <Edit />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Delete">
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDeleteMember(member.id)}
-                        disabled={isDraftActive}
-                      >
+                      <IconButton color="error" onClick={() => handleDeleteMember(member.id)} disabled={isDraftActive}>
                         <Delete />
                       </IconButton>
                     </Tooltip>
@@ -382,12 +379,17 @@ const draftsCollection = collection(db, 'drafts');
                     <Tooltip title="Show Details">
                       <IconButton
                         color="primary"
-                        onClick={() =>{
-                          handleShowDraftDetails(draft.id)
-                          console.log(draft)
-                        } }
+                        onClick={() => {
+                          handleShowDraftDetails(draft.id);
+                          console.log(draft);
+                        }}
                       >
                         <Visibility />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete">
+                      <IconButton color="error" onClick={() => handleDeleteLeague(draft.id)}>
+                        <Delete />
                       </IconButton>
                     </Tooltip>
                   </TableCell>
@@ -399,117 +401,121 @@ const draftsCollection = collection(db, 'drafts');
       </Box>
 
       {
-
-<Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm">
-  <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#2E3B55' }}>
-    {editMember ? 'Edit Member' : 'Add New Member'}
-  </DialogTitle>
-  <DialogContent sx={{ padding: 3 }}>
-    <TextField
-      label="Name"
-      fullWidth
-      value={newMember.name}
-      onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
-      sx={{ mb: 2 }}
-    />
-    <TextField
-      label="Score"
-      fullWidth
-      type="number"
-      value={newMember.score}
-      onChange={(e) => setNewMember({ ...newMember, score: e.target.value })}
-      sx={{ mb: 2 }}
-    />
-    <TextField
-      label="Rank"
-      fullWidth
-      type="number"
-      value={newMember.rank}
-      onChange={(e) => setNewMember({ ...newMember, rank: e.target.value })}
-      sx={{ mb: 2 }}
-    />
-  </DialogContent>
-  <DialogActions sx={{ padding: '0 24px 24px' }}>
-    <Button onClick={() => setIsDialogOpen(false)} color="primary">
-      Cancel
-    </Button>
-    <Button
-      onClick={handleAddMember} // Trigger the Add member logic
-      color="primary"
-      variant="contained"
-      sx={{ backgroundColor: '#4A90E2' }}
-    >
-      Save
-    </Button>
-  </DialogActions>
-</Dialog>
-
+        <Dialog open={isDialogOpen} onClose={() => setIsDialogOpen(false)} fullWidth maxWidth="sm">
+          <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#2E3B55' }}>
+            {editMember ? 'Edit Member' : 'Add New Member'}
+          </DialogTitle>
+          <DialogContent sx={{ padding: 3 }}>
+            <TextField
+              label="Name"
+              fullWidth
+              value={newMember.name}
+              onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              label="Score"
+              fullWidth
+              type="number"
+              value={newMember.score}
+              onChange={(e) => setNewMember({ ...newMember, score: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              label="Rank"
+              fullWidth
+              type="number"
+              value={newMember.rank}
+              onChange={(e) => setNewMember({ ...newMember, rank: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ padding: '0 24px 24px' }}>
+            <Button onClick={() => setIsDialogOpen(false)} color="primary">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddMember} // Trigger the Add member logic
+              color="primary"
+              variant="contained"
+              sx={{ backgroundColor: '#4A90E2' }}
+            >
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
       }
 
-      
-
       {showDraftDetails && (
-  <Dialog open={Boolean(showDraftDetails)} onClose={() => setShowDraftDetails(null)} fullWidth maxWidth="md">
-    <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#2E3B55' }}>
-      Draft Details
-    </DialogTitle>
-    <DialogContent sx={{ padding: 3 }}>
-      {/* Draft Information Section */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
-          Draft ID: <span style={{ color: '#000' }}>{showDraftDetails.id}</span>
-        </Typography>
-        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
-          Start Time: <span style={{ color: '#000' }}>{showDraftDetails.startTime}</span>
-        </Typography>
-        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
-          End Time: <span style={{ color: '#000' }}>
-            {showDraftDetails.endTime || 'In Progress'}
-          </span>
-        </Typography>
-        <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
-          Status: <span style={{ color: showDraftDetails.isActive ? '#2E7D32' : '#E57373' }}>
-            {showDraftDetails.isActive ? 'Active' : 'Completed'}
-          </span>
-        </Typography>
-      </Box>
+        <Dialog open={Boolean(showDraftDetails)} onClose={() => setShowDraftDetails(null)} fullWidth maxWidth="md">
+          <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1.25rem', color: '#2E3B55' }}>Draft Details</DialogTitle>
+          <DialogContent sx={{ padding: 3 }}>
+            {/* Draft Information Section */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
+                Draft ID: <span style={{ color: '#000' }}>{showDraftDetails.id}</span>
+              </Typography>
+              <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
+                Start Time: <span style={{ color: '#000' }}>{showDraftDetails.startTime}</span>
+              </Typography>
+              <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
+                End Time: <span style={{ color: '#000' }}>{showDraftDetails.endTime || 'In Progress'}</span>
+              </Typography>
+              <Typography variant="body1" sx={{ fontWeight: 'bold', color: '#4A90E2' }}>
+                Status:{' '}
+                <span style={{ color: showDraftDetails.isActive ? '#2E7D32' : '#E57373' }}>
+                  {showDraftDetails.isActive ? 'Active' : 'Completed'}
+                </span>
+              </Typography>
+            </Box>
 
-      {/* Members in this Draft */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4A90E2', mb: 2 }}>
-          Members in this Draft:
-        </Typography>
-        <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
-          <Table>
-            <TableHead sx={{ backgroundColor: '#f4f6f9' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 'bold', color: '#4A90E2' }}>Name</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: '#4A90E2' }}>Score</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: '#4A90E2' }}>Rank</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {showDraftDetails.members.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell>{member.name}</TableCell>
-                  <TableCell>{member.score}</TableCell>
-                  <TableCell>{member.rank}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Box>
-    </DialogContent>
-    <DialogActions sx={{ padding: '0 24px 24px' }}>
-      <Button onClick={() => setShowDraftDetails(null)} color="primary" variant="contained" sx={{ backgroundColor: '#4A90E2' }}>
-        Close
-      </Button>
-    </DialogActions>
-  </Dialog>
-)}
-
-
+            {/* Members in this Draft */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#4A90E2', mb: 2 }}>
+                Members in this Draft:
+              </Typography>
+              <TableContainer component={Paper} sx={{ boxShadow: 3 }}>
+                <Table>
+                  <TableHead sx={{ backgroundColor: '#f4f6f9' }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#4A90E2' }}>Name</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#4A90E2' }}>Score</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: '#4A90E2' }}>Rank</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {showDraftDetails.members.map((member) => (
+                      <TableRow key={member.id}>
+                        <TableCell>{member.name}</TableCell>
+                        <TableCell>{member.score}</TableCell>
+                        <TableCell>{member.rank}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ padding: '0 24px 24px' }}>
+            <Button
+              onClick={() => setShowDraftDetails(null)}
+              color="primary"
+              variant="contained"
+              sx={{ backgroundColor: '#4A90E2' }}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => setShowDraftDetails(null)}
+              color="primary"
+              variant="contained"
+              sx={{ backgroundColor: '#4A90E2' }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
 
       {/* Snackbar for success message */}
       <Snackbar open={snackbarOpen} autoHideDuration={3000} onClose={() => setSnackbarOpen(false)}>

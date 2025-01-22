@@ -5,12 +5,12 @@ import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCiL-RgJ0n8-C7Z_46J9i5VNOfBM_hFOSA",
-  authDomain: "sky-resource-form.firebaseapp.com",
-  projectId: "sky-resource-form",
-  storageBucket: "sky-resource-form.appspot.com", // Fixed storageBucket URL
-  messagingSenderId: "336317455241",
-  appId: "1:336317455241:web:7a6f0ac3dfdea9a60f9f58"
+  apiKey: "AIzaSyCKscZie5dqmEaWMfPhu_KsxY1hKhAU3nE",
+  authDomain: "fantasy-app-ff2b6.firebaseapp.com",
+  projectId: "fantasy-app-ff2b6",
+  storageBucket: "fantasy-app-ff2b6.firebasestorage.app",
+  messagingSenderId: "208149025123",
+  appId: "1:208149025123:web:7cafe94046dcfced92c356"
 };
 
 // Initialize Firebase

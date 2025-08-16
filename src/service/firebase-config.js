@@ -5,12 +5,13 @@ import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCKscZie5dqmEaWMfPhu_KsxY1hKhAU3nE",
-  authDomain: "fantasy-app-ff2b6.firebaseapp.com",
-  projectId: "fantasy-app-ff2b6",
-  storageBucket: "fantasy-app-ff2b6.firebasestorage.app",
-  messagingSenderId: "208149025123",
-  appId: "1:208149025123:web:7cafe94046dcfced92c356"
+  apiKey: "AIzaSyBHZIJMoAbPBnFx10lMAwN6hB3Uhd2mpGk",
+  authDomain: "fir-app-project-570db.firebaseapp.com",
+  projectId: "fir-app-project-570db",
+  storageBucket: "fir-app-project-570db.firebasestorage.app",
+  messagingSenderId: "693382005476",
+  appId: "1:693382005476:web:c7a8f099c9fbc8887da2f1",
+  measurementId: "G-3NVDJH7EK8"
 };
 
 // Initialize Firebase

@@ -22,7 +22,7 @@ const Logo = forwardRef(({ disabledLink = false, sx, ...other }, ref) => {
   const logo = (
     <Box
       component="img"
-      src={'https://i.ibb.co/F46T9VB/logo.png'}
+      src={'https://play-lh.googleusercontent.com/PbZqn39rFchnvpNwhtdKhFjyeIscWBVriDUMrR53V4vyZKc5OoiZVj9xakC3dMuncw=w240-h480-rw'}
       sx={{
         width: 200,
         height: 130,

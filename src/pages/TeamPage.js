@@ -1,282 +1,234 @@
-import React, { useState, useEffect } from 'react';
+// Simplified and cleaned-up UserPage component with pagination and better structure
+import { Helmet } from 'react-helmet-async';
+import { useEffect, useState } from 'react';
 import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  TextField,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Snackbar,
-  Alert,
+  Card, Table, Stack, Paper, Avatar, Button, Popover, Checkbox, TableRow,
+  TableBody, TableCell, Container, Typography, IconButton, TableContainer,
+  TablePagination, Box, Switch, Dialog, DialogTitle, DialogContent, Slide,
+  MenuItem
 } from '@mui/material';
-import { Delete, Edit } from '@mui/icons-material';
-import { collection, addDoc, getDocs, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import dayjs from "dayjs";
+
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../service/firebase-config';
+import Iconify from '../components/iconify';
+import Scrollbar from '../components/scrollbar';
+import { UserListHead, UserListToolbar } from '../sections/@dashboard/user';
 import TableLoading from '../components/table-loading/tableLoading';
 
-const TeamList = () => {
-  const [teams, setTeams] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEditModalOpen, setEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [currentTeam, setCurrentTeam] = useState(null);
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamLogo, setNewTeamLogo] = useState(null); // Image file state
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  const TABLE_HEAD = [
-    { id: 'teamName', label: 'Team Name', alignRight: false },
-    { id: 'teamLogo', label: 'Team Logo', alignRight: false },
-    { id: 'actions', label: 'Actions', alignRight: false },
-  ];
+const TABLE_HEAD = [
+  { id: 'imageUrl', label: 'Image', alignRight: false },
+  { id: 'name', label: 'Name', alignRight: false },
+  { id: 'car_no', label: 'Vehicle No', alignRight: false },
+  { id: 'company', label: 'Company Name', alignRight: false },
+  { id: 'service', label: 'Service Name', alignRight: false },
+  { id: 'vehicle', label: 'Vehicle', alignRight: false },
+  { id: 'status', label: 'Status', alignRight: false },
 
-  // Fetch data from Firebase Firestore
+  { id: 'action', label: 'Action', alignRight: false }
+];
+
+const Transition = Slide;
+
+export default function UserPage() {
+  const navigate = useNavigate();
+  const [services, setServices] = useState([]);
+  const [filterName, setFilterName] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [selected, setSelected] = useState([]);
+  const [popoverAnchor, setPopoverAnchor] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [viewDeleted, setViewDeleted] = useState(false);
+  const [openDialog, setOpenDialog] = useState(false);
+
   useEffect(() => {
-    const fetchTeams = async () => {
-      const querySnapshot = await getDocs(collection(db, 'teams'));
-      const teamsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setTeams(teamsData);
+    const fetchservices = async () => {
+      setIsLoading(true);
+      const snapshot = await getDocs(collection(db, 'requests'));
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      console.log(fetched)
+      setServices(fetched);
       setIsLoading(false);
     };
+    fetchservices();
+  }, [viewDeleted]);
 
-    fetchTeams();
-  }, []);
-
-  const handleImageChange = (e) => {
-    setNewTeamLogo(e.target.files[0]);
+  const handleOpenMenu = (event, user) => {
+    setPopoverAnchor(event.currentTarget);
+    setSelectedUser(user);
   };
 
-  const handleDeleteTeam = (team) => {
-    setCurrentTeam(team);
-    setDeleteModalOpen(true);
+  const handleCloseMenu = () => {
+    setPopoverAnchor(null);
   };
 
-  const uploadImageToCloudinary = async (image) => {
-    const formData = new FormData();
-    formData.append('file', image);
-    formData.append('upload_preset', 'newpresent'); // Replace with your Cloudinary upload preset
-    formData.append('cloud_name', 'dkfgfnbst'); // Replace with your Cloudinary cloud name
-
-    try {
-      const response = await fetch('https://api.cloudinary.com/v1_1/dkfgfnbst/image/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json();
-      return data.secure_url; // This is the image URL that you will store in Firestore
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      return null;
-    }
+  const handleViewUser = () => {
+    setOpenDialog(true);
+    handleCloseMenu();
   };
 
-  const handleAddTeam = async () => {
-    if (newTeamName.trim() !== '') {
-      try {
-        let teamLogoUrl = 'defaultLogo.png'; // Default logo in case no image is uploaded
-        if (newTeamLogo) {
-          teamLogoUrl = await uploadImageToCloudinary(newTeamLogo);
-        }
-
-        const docRef = await addDoc(collection(db, 'teams'), {
-          teamName: newTeamName,
-          teamLogo: teamLogoUrl,
-        });
-
-        setTeams(prevTeams => [
-          ...prevTeams,
-          { id: docRef.id, teamName: newTeamName, teamLogo: teamLogoUrl },
-        ]);
-        setNewTeamName('');
-        setNewTeamLogo(null); // Reset the logo input
-        setEditModalOpen(false);
-        setSnackbarMessage('Team added successfully!');
-        setSnackbarOpen(true);
-      } catch (error) {
-        console.error("Error adding team:", error);
-      }
-    }
+  const handleBlockUser = async () => {
+    if (!selectedUser) return;
+    const userRef = doc(db, 'requests', selectedUser.id);
+    const newStatus = !selectedUser.isBlocked;
+    await updateDoc(userRef, { isBlocked: newStatus });
+    setServices(prev =>
+      prev.map(u => (u.id === selectedUser.id ? { ...u, isBlocked: newStatus } : u))
+    );
+    toast.success(`User ${newStatus ? 'Blocked' : 'Unblocked'}`);
+    handleCloseMenu();
   };
 
-  const handleEditTeam = (team) => {
-    setCurrentTeam(team);
-    setNewTeamName(team.teamName);
-    setNewTeamLogo(null); // Allow for new image to be uploaded
-    setEditModalOpen(true);
+  const handleCloseDialog = () => setOpenDialog(false);
+
+  const handleChangePage = (event, newPage) => setPage(newPage);
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
-  const handleSaveTeamChanges = async () => {
-    try {
-      let teamLogoUrl = currentTeam.teamLogo; // Keep the existing logo if no new logo is uploaded
-      if (newTeamLogo) {
-        teamLogoUrl = await uploadImageToCloudinary(newTeamLogo);
-      }
-
-      const teamRef = doc(db, 'teams', currentTeam.id);
-      await updateDoc(teamRef, { teamName: newTeamName, teamLogo: teamLogoUrl });
-
-      setTeams(prevTeams =>
-        prevTeams.map(team =>
-          team.id === currentTeam.id ? { ...team, teamName: newTeamName, teamLogo: teamLogoUrl } : team
-        )
-      );
-      setEditModalOpen(false);
-      setSnackbarMessage('Team updated successfully!');
-      setSnackbarOpen(true);
-    } catch (error) {
-      console.error("Error updating team:", error);
-    }
-  };
-
-  const handleConfirmDelete = async () => {
-    try {
-      const teamRef = doc(db, 'teams', currentTeam.id);
-      await deleteDoc(teamRef);
-      setTeams(prevTeams => prevTeams.filter(team => team.id !== currentTeam.id));
-      setDeleteModalOpen(false);
-      setSnackbarMessage('Team deleted successfully!');
-      setSnackbarOpen(true);
-    } catch (error) {
-      console.error("Error deleting team:", error);
-    }
-  };
-
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
-  };
+  const filteredservices = services.filter(user =>
+    
+    user
+  );
 
   return (
-    <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>
-        Teams List
+    <>
+      <Helmet><title>Service Management</title></Helmet>
+      <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold' }}>
+      Service Management
       </Typography>
-      <Button
-        style={{ backgroundColor: '#f87203' }}
-        onClick={() => {
-          setNewTeamName('');
-          setCurrentTeam(null);
-          setEditModalOpen(true);
+      {/* <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
+        <Typography variant="h4">services</Typography>
+        <Box display="flex" alignItems="center">
+          <Typography>Deleted services</Typography>
+          <Switch checked={viewDeleted} onChange={() => setViewDeleted(!viewDeleted)} />
+        </Box>
+      </Stack> */}
+
+      <Card>
+        <UserListToolbar filterName={filterName} onFilterName={(e) => setFilterName(e.target.value)} />
+
+        <Scrollbar>
+          <TableContainer>
+            <Table>
+              <UserListHead
+                headLabel={TABLE_HEAD}
+                rowCount={filteredservices.length}
+                numSelected={selected.length}
+                onSelectAllClick={(e) => {
+                  const newSelecteds = e.target.checked ? filteredservices.map(n => n.id) : [];
+                  setSelected(newSelecteds);
+                }}
+              />
+              <TableBody>
+                {isLoading ? <TableLoading tableHeading={TABLE_HEAD} /> : (
+                  filteredservices.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(request => (
+                    <TableRow key={request.id} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selected.includes(request.id)}
+                          onChange={() => {
+                            const newSelected = selected.includes(request.id)
+                              ? selected.filter(id => id !== request.id)
+                              : [...selected, request.id];
+                            setSelected(newSelected);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell><Avatar src={request.imageUrl} alt={request.name} /></TableCell>
+                      <TableCell>{request.id}</TableCell>
+                      <TableCell>{request.car_no}</TableCell>
+                      <TableCell>{request.companyName}</TableCell>
+                      <TableCell>{request.selected_service}</TableCell>
+                      <TableCell>{request.selected_vehicle}</TableCell>
+                      <TableCell>{request.status}</TableCell>
+
+
+
+                    
+                      <TableCell align="left">
+                        <IconButton onClick={(e) => handleOpenMenu(e, request)}>
+                          <Iconify icon="eva:more-vertical-fill" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Scrollbar>
+
+        <TablePagination
+          component="div"
+          count={filteredservices.length}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[5, 10, 25]}
+        />
+      </Card>
+
+      <Popover
+        open={Boolean(popoverAnchor)}
+        anchorEl={popoverAnchor}
+        onClose={handleCloseMenu}
+        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transition
+        PaperProps={{
+          sx: {
+            p: 1,
+            width: 160,
+            borderRadius: 2,
+            boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.1)',
+            animation: 'fadeIn 0.3s ease-in-out'
+          }
         }}
-        variant="contained"
-        sx={{ mb: 2 }}
       >
-        Add New Team
-      </Button>
+        <MenuItem onClick={handleViewUser}>
+          <Iconify icon="eva:eye-fill" sx={{ mr: 1 }} /> View
+        </MenuItem>
+      
+      </Popover>
 
-      {isLoading ? (
-        <TableContainer sx={{ minWidth: 800 }}>
-          <Table>
-            <TableBody>
-            <TableLoading tableHeading={TABLE_HEAD} />
-            </TableBody>
-          </Table>
-        </TableContainer>
-      ) : (
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Team Name</TableCell>
-                <TableCell>Team Logo</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {teams.map((team) => (
-                <TableRow key={team.id}>
-                  <TableCell>{team.teamName}</TableCell>
-                  <TableCell>
-                    <img src={team.teamLogo} alt={team.teamName} width={50} height={50} />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="Edit">
-                      <IconButton onClick={() => handleEditTeam(team)}>
-                        <Edit />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton color="error" onClick={() => handleDeleteTeam(team)}>
-                        <Delete />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {/* Edit/Add Team Modal */}
-      <Dialog open={isEditModalOpen} onClose={() => setEditModalOpen(false)}>
-        <DialogTitle>{currentTeam ? 'Edit Team' : 'Add Team'}</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Team Name"
-            value={newTeamName}
-            onChange={(e) => setNewTeamName(e.target.value)}
-            fullWidth
-            margin="dense"
-          />
-          <input
-            type="file"
-            onChange={handleImageChange}
-            accept="image/*"
-            style={{ marginTop: '1rem' }}
-          />
-          {newTeamLogo && (
-            <img src={URL.createObjectURL(newTeamLogo)} alt="Preview" width={100} height={100} />
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        TransitionComponent={Transition}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>User Details</DialogTitle>
+        <DialogContent dividers>
+          {selectedUser && (
+            <Stack spacing={2}>
+              <Typography><strong>User Id:</strong> {selectedUser.user_id}</Typography>
+              <Typography><strong>User Location:</strong> {selectedUser.location}</Typography>
+              <Typography><strong>Contact No :</strong> {selectedUser.contact_no}</Typography>
+              <Typography><strong>Vehicle No:</strong> {selectedUser.car_no}</Typography>
+              <Typography><strong>Vehicle Color:</strong> {selectedUser.car_color              }</Typography>
+              <Typography><strong>Company Name:</strong> {selectedUser.companyName}</Typography>
+              <Typography><strong>Company Address:</strong> {selectedUser.companyAddress || 'N/A'}</Typography>
+              <Typography><strong>Selected Service:</strong> {selectedUser.selected_service}</Typography>
+              <Typography><strong>Selected Vehicle:</strong> {selectedUser.selected_vehicle}</Typography>
+              <Typography><strong>status:</strong> {selectedUser.status}</Typography>
+              <Typography><strong>Company Id:</strong> {selectedUser.companyId}</Typography>
+              <Typography><strong>Date:</strong> {dayjs.unix(selectedUser.timestamp.seconds).format("YYYY-MM-DD HH:mm:ss")              }</Typography>
+              <Typography><strong>Details:</strong> {selectedUser.details || 'N/A'}</Typography>
+           
+            </Stack>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditModalOpen(false)} color="primary">
-            Cancel
-          </Button>
-          <Button
-            onClick={currentTeam ? handleSaveTeamChanges : handleAddTeam}
-            color="primary"
-          >
-            {currentTeam ? 'Save Changes' : 'Add Team'}
-          </Button>
-        </DialogActions>
       </Dialog>
-
-      {/* Delete Confirmation Modal */}
-      <Dialog open={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
-        <DialogTitle>Are you sure you want to delete this team?</DialogTitle>
-        <DialogActions>
-          <Button onClick={() => setDeleteModalOpen(false)} color="primary">
-            Cancel
-          </Button>
-          <Button onClick={handleConfirmDelete} color="primary">
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Snackbar for success message */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={handleSnackbarClose}
-      >
-        <Alert onClose={handleSnackbarClose} severity="success">
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+    </>
   );
-};
-
-export default TeamList;
+}

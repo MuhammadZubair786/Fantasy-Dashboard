@@ -1,267 +1,223 @@
-import React, { useState, useEffect } from 'react';
+// Simplified and cleaned-up UserPage component with pagination and better structure
+import { Helmet } from 'react-helmet-async';
+import { useEffect, useState } from 'react';
 import {
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  TextField,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Tooltip,
-  Snackbar,
-  Alert,
-  CircularProgress,
+  Card, Table, Stack, Paper, Avatar, Button, Popover, Checkbox, TableRow,
+  TableBody, TableCell, Container, Typography, IconButton, TableContainer,
+  TablePagination, Box, Switch, Dialog, DialogTitle, DialogContent, Slide,
+  MenuItem
 } from '@mui/material';
-import { Delete, Edit } from '@mui/icons-material';
-import axios from 'axios';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../service/firebase-config'; // Your Firebase configuration file
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../service/firebase-config';
+import Iconify from '../components/iconify';
+import Scrollbar from '../components/scrollbar';
+import { UserListHead, UserListToolbar } from '../sections/@dashboard/user';
 import TableLoading from '../components/table-loading/tableLoading';
 
-const LeagueList = () => {
-  const [leagues, setLeagues] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEditModalOpen, setEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [currentLeague, setCurrentLeague] = useState(null);
-  const [newLeagueName, setNewLeagueName] = useState('');
-  const [newLeagueImage, setNewLeagueImage] = useState(null);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [uploadingImage, setUploadingImage] = useState(false);
+const TABLE_HEAD = [
+  { id: 'imageUrl', label: 'Image', alignRight: false },
+  { id: 'name', label: 'Name', alignRight: false },
+ 
+  { id: 'contact', label: 'Contact', alignRight: false },
+  { id: 'address', label: 'Address', alignRight: false },
 
-  const leaguesCollection = collection(db, 'leagues'); // Firestore collection reference
+  { id: 'isBlocked', label: 'Account Status', alignRight: false },
+  { id: 'action', label: 'Action', alignRight: false }
+];
 
-  const TABLE_HEAD = [
-    { id: 'teamName', label: 'Team Name', alignRight: false },
-    { id: 'teamLogo', label: 'Team Logo', alignRight: false },
-    { id: 'actions', label: 'Actions', alignRight: false },
-  ];
+const Transition = Slide;
 
-  // Fetch leagues from Firestore
+export default function UserPage() {
+  const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [filterName, setFilterName] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [selected, setSelected] = useState([]);
+  const [popoverAnchor, setPopoverAnchor] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [viewDeleted, setViewDeleted] = useState(false);
+  const [openDialog, setOpenDialog] = useState(false);
+
   useEffect(() => {
-    const fetchLeagues = async () => {
+    const fetchUsers = async () => {
       setIsLoading(true);
-      try {
-        const data = await getDocs(leaguesCollection);
-        setLeagues(data.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-      } catch (error) {
-        console.error('Error fetching leagues:', error);
-      } finally {
-        setIsLoading(false);
-      }
+      const snapshot = await getDocs(collection(db, 'Company'));
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setUsers(fetched);
+      setIsLoading(false);
     };
+    fetchUsers();
+  }, [viewDeleted]);
 
-    fetchLeagues();
-  }, []);
-
-  const handleEditLeague = (league) => {
-    setCurrentLeague(league);
-    setNewLeagueName(league.leagueName);
-    setNewLeagueImage(null);
-    setEditModalOpen(true);
+  const handleOpenMenu = (event, user) => {
+    setPopoverAnchor(event.currentTarget);
+    setSelectedUser(user);
   };
 
-  const handleDeleteLeague = (league) => {
-    setCurrentLeague(league);
-    setDeleteModalOpen(true);
+  const handleCloseMenu = () => {
+    setPopoverAnchor(null);
   };
 
-  const uploadImageToCloudinary = async (imageFile) => {
-    const formData = new FormData();
-    formData.append('file', imageFile);
-    formData.append('upload_preset', 'newpresent'); // Replace with your Cloudinary upload preset
-
-    try {
-      const response = await axios.post(
-        `https://api.cloudinary.com/v1_1/dkfgfnbst/image/upload`, // Replace "your_cloud_name"
-        formData
-      );
-      return response.data.secure_url;
-    } catch (error) {
-      console.error('Error uploading image to Cloudinary:', error);
-      throw new Error('Image upload failed');
-    }
+  const handleViewUser = () => {
+    setOpenDialog(true);
+    handleCloseMenu();
   };
 
-  const handleSaveLeagueChanges = async () => {
-    setUploadingImage(true);
-
-    try {
-      let imageUrl = currentLeague?.imageUrl || '';
-      if (newLeagueImage) {
-        imageUrl = await uploadImageToCloudinary(newLeagueImage);
-      }
-
-      if (currentLeague) {
-        // Update existing league
-        const leagueDoc = doc(db, 'leagues', currentLeague.id);
-        await updateDoc(leagueDoc, { leagueName: newLeagueName, imageUrl });
-        setLeagues((prev) =>
-          prev.map((league) =>
-            league.id === currentLeague.id ? { ...league, leagueName: newLeagueName, imageUrl } : league
-          )
-        );
-        setSnackbarMessage('League updated successfully!');
-      } else {
-        // Add new league
-        const newDoc = await addDoc(leaguesCollection, { leagueName: newLeagueName, imageUrl });
-        setLeagues((prev) => [...prev, { id: newDoc.id, leagueName: newLeagueName, imageUrl }]);
-        setSnackbarMessage('League added successfully!');
-      }
-
-      setEditModalOpen(false);
-    } catch (error) {
-      console.error('Error saving league:', error);
-      setSnackbarMessage('Failed to save league');
-    } finally {
-      setUploadingImage(false);
-      setSnackbarOpen(true);
-    }
+  const handleBlockUser = async () => {
+    if (!selectedUser) return;
+    const userRef = doc(db, 'Company', selectedUser.id);
+    const newStatus = !selectedUser.isBlocked;
+    await updateDoc(userRef, { isBlocked: newStatus });
+    setUsers(prev =>
+      prev.map(u => (u.id === selectedUser.id ? { ...u, isBlocked: newStatus } : u))
+    );
+    toast.success(`User ${newStatus ? 'Blocked' : 'Unblocked'}`);
+    handleCloseMenu();
   };
 
-  const handleConfirmDelete = async () => {
-    if (currentLeague) {
-      const leagueDoc = doc(db, 'leagues', currentLeague.id);
-      await deleteDoc(leagueDoc);
-      setLeagues((prev) => prev.filter((league) => league.id !== currentLeague.id));
-      setSnackbarMessage('League deleted successfully!');
-    }
+  const handleCloseDialog = () => setOpenDialog(false);
 
-    setDeleteModalOpen(false);
-    setSnackbarOpen(true);
+  const handleChangePage = (event, newPage) => setPage(newPage);
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
-  };
+  const filteredUsers = users.filter(user =>
+    user.name?.toLowerCase().includes(filterName.toLowerCase())
+  );
 
   return (
-    <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>
-        Leagues List
+    <>
+      <Helmet><title>User Management</title></Helmet>
+      <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold' }}>
+      Company Management
       </Typography>
-      <Button
-        style={{ backgroundColor: '#f87203' }}
-        onClick={() => {
-          setNewLeagueName('');
-          setNewLeagueImage(null);
-          setCurrentLeague(null);
-          setEditModalOpen(true);
+      {/* <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
+        <Typography variant="h4">Users</Typography>
+        <Box display="flex" alignItems="center">
+          <Typography>Deleted Users</Typography>
+          <Switch checked={viewDeleted} onChange={() => setViewDeleted(!viewDeleted)} />
+        </Box>
+      </Stack> */}
+
+      <Card>
+        <UserListToolbar filterName={filterName} onFilterName={(e) => setFilterName(e.target.value)} />
+
+        <Scrollbar>
+          <TableContainer>
+            <Table>
+              <UserListHead
+                headLabel={TABLE_HEAD}
+                rowCount={filteredUsers.length}
+                numSelected={selected.length}
+                onSelectAllClick={(e) => {
+                  const newSelecteds = e.target.checked ? filteredUsers.map(n => n.id) : [];
+                  setSelected(newSelecteds);
+                }}
+              />
+              <TableBody>
+                {isLoading ? <TableLoading tableHeading={TABLE_HEAD} /> : (
+                  filteredUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map(user => (
+                    <TableRow key={user.id} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selected.includes(user.id)}
+                          onChange={() => {
+                            const newSelected = selected.includes(user.id)
+                              ? selected.filter(id => id !== user.id)
+                              : [...selected, user.id];
+                            setSelected(newSelected);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell><Avatar src={user.imageUrl} alt={user.name} /></TableCell>
+                      <TableCell>{user.name}</TableCell>
+
+                    
+                      <TableCell>{user.contact}</TableCell>
+                      <TableCell>{user.address}</TableCell>
+                      
+                      <TableCell>
+                        <Button size="small" color={user.isBlocked ? 'error' : 'success'} variant="outlined">
+                          {user.isBlocked ? 'Blocked' : 'Active'}
+                        </Button>
+                      </TableCell>
+                      <TableCell align="left">
+                        <IconButton onClick={(e) => handleOpenMenu(e, user)}>
+                          <Iconify icon="eva:more-vertical-fill" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Scrollbar>
+
+        <TablePagination
+          component="div"
+          count={filteredUsers.length}
+          page={page}
+          onPageChange={handleChangePage}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[5, 10, 25]}
+        />
+      </Card>
+
+      <Popover
+        open={Boolean(popoverAnchor)}
+        anchorEl={popoverAnchor}
+        onClose={handleCloseMenu}
+        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transition
+        PaperProps={{
+          sx: {
+            p: 1,
+            width: 160,
+            borderRadius: 2,
+            boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.1)',
+            animation: 'fadeIn 0.3s ease-in-out'
+          }
         }}
-        variant="contained"
-        sx={{ mb: 2 }}
       >
-        Add New League
-      </Button>
+        <MenuItem onClick={handleViewUser}>
+          <Iconify icon="eva:eye-fill" sx={{ mr: 1 }} /> View
+        </MenuItem>
+        <MenuItem onClick={handleBlockUser}>
+          <Iconify icon="eva:slash-outline" sx={{ mr: 1 }} />
+          {selectedUser?.isBlocked ? 'Unblock' : 'Block'}
+        </MenuItem>
+      </Popover>
 
-      {isLoading ? (
-       <TableContainer sx={{ minWidth: 800 }}>
-       <Table>
-         <TableBody>
-           <TableLoading tableHeading={TABLE_HEAD} />
-         </TableBody>
-       </Table>
-     </TableContainer>
-      ) : (
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>League Name</TableCell>
-                <TableCell>Image</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {leagues.map((league) => (
-                <TableRow key={league.id}>
-                  <TableCell>{league.leagueName}</TableCell>
-                  <TableCell>
-                    <img src={league.imageUrl} alt={league.leagueName} width="50" height="50" />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip title="Edit">
-                      <IconButton onClick={() => handleEditLeague(league)}>
-                        <Edit />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Delete">
-                      <IconButton color="error" onClick={() => handleDeleteLeague(league)}>
-                        <Delete />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {/* Edit/Add League Modal */}
-      <Dialog open={isEditModalOpen} onClose={() => setEditModalOpen(false)}>
-        <DialogTitle>{currentLeague ? 'Edit League' : 'Add League'}</DialogTitle>
-        <DialogContent>
-          <TextField
-            label="League Name"
-            value={newLeagueName}
-            onChange={(e) => setNewLeagueName(e.target.value)}
-            fullWidth
-            margin="dense"
-          />
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setNewLeagueImage(e.target.files[0])}
-            style={{ marginTop: 10 }}
-          />
-          {uploadingImage && <CircularProgress size={24} sx={{ mt: 2 }} />}
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        TransitionComponent={Transition}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>User Details</DialogTitle>
+        <DialogContent dividers>
+          {selectedUser && (
+            <Stack spacing={2}>
+              <Typography><strong>Name:</strong> {selectedUser.name}</Typography>
+              <Typography><strong>Contact:</strong> {selectedUser.contact}</Typography>
+              <Typography><strong>Address:</strong> {selectedUser.address || 'N/A'}</Typography>
+              <Typography><strong>UID:</strong> {selectedUser.id}</Typography>
+              <Typography><strong>Status:</strong> {selectedUser.isBlocked ? 'Blocked' : 'Active'}</Typography>
+            </Stack>
+          )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditModalOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveLeagueChanges} color="primary">
-            {currentLeague ? 'Save' : 'Add'}
-          </Button>
-        </DialogActions>
       </Dialog>
-
-      {/* Delete League Modal */}
-      <Dialog open={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)}>
-        <DialogTitle>Confirm Delete</DialogTitle>
-        <DialogContent>
-          Are you sure you want to delete <strong>{currentLeague?.leagueName}</strong>?
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Snackbar for notifications */}
-      <Snackbar
-  open={snackbarOpen}
-  autoHideDuration={3000}
-  onClose={handleSnackbarClose}
-  anchorOrigin={{ vertical: 'center', horizontal: 'center' }} // Center the snackbar
->
-  <Alert onClose={handleSnackbarClose} severity="success" sx={{ width: '100%' }}>
-    {snackbarMessage}
-  </Alert>
-</Snackbar>
-
-    </Box>
+    </>
   );
-};
-
-export default LeagueList;
+}

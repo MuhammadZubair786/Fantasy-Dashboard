@@ -54,8 +54,8 @@ export default function Router() {
         { path: 'app', element: <DashboardAppPage /> },
         { path: 'user', element: <UserPage /> },
         { path: 'standing', element: <StandingLeagues /> },
-        { path: 'leaguge', element: <LeagugeList /> },
-        { path: 'team', element: <TeamList /> },
+        { path: 'company', element: <LeagugeList /> },
+        { path: 'services', element: <TeamList /> },
 
         { path: 'order', element: <OrderManagement /> },
         { path: 'transport', element: <TransportationManagement /> },
